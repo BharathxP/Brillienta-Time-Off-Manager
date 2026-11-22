@@ -1,8 +1,8 @@
 import * as React from 'react';
-import { DefaultButton, Dropdown, IconButton, PrimaryButton, SpinButton, TextField } from '@fluentui/react';
+import { DefaultButton, Dropdown, IconButton, PrimaryButton, TextField } from '@fluentui/react';
 import { ILeaveTemplate, LeaveUnit, RecurrenceFreq } from '../../models/types';
 import { ISectionProps } from './AdminPage';
-import { Card, TypeChip } from '../common/Ui';
+import { Card, TypeChip, NumberBox } from '../common/Ui';
 import { describeRecurrence } from '../../services/requests';
 
 /** Leave templates: one-click requests (e.g. "Friday afternoon off", "Doctor appointment (2 h)", "WFH every other Friday"). */
@@ -27,11 +27,11 @@ export function TemplatesAdmin(props: ISectionProps): JSX.Element {
               <TextField label="Name" value={t.name} onChange={(_, v) => update({ ...t, name: v || '' })} />
               <Dropdown label="Leave type" selectedKey={t.leaveType} options={draft.leaveTypes.filter((x) => x.active).map((x) => ({ key: x.key, text: x.name }))} onChange={(_, o) => o && update({ ...t, leaveType: String(o.key) })} />
               <Dropdown label="Length" selectedKey={t.unit} options={[{ key: 'day', text: 'Full day(s)' }, { key: 'half', text: 'Half day' }, { key: 'hours', text: 'Hours' }]} onChange={(_, o) => o && update({ ...t, unit: o.key as LeaveUnit })} />
-              {t.unit === 'day' && <SpinButton label="Calendar days from the start date" min={1} max={60} value={String(t.days || 1)} onChange={(_, v) => update({ ...t, days: Number(v) || 1 })} />}
+              {t.unit === 'day' && <NumberBox label="Calendar days from the start date" min={1} max={60} value={String(t.days || 1)} onChange={(_, v) => update({ ...t, days: Number(v) || 1 })} />}
               {t.unit === 'half' && <Dropdown label="Half" selectedKey={t.halfDayPart || 'am'} options={[{ key: 'am', text: 'Morning' }, { key: 'pm', text: 'Afternoon' }]} onChange={(_, o) => o && update({ ...t, halfDayPart: o.key as 'am' })} />}
               {t.unit === 'hours' && (
                 <>
-                  <SpinButton label="Hours" min={0.5} max={12} step={0.5} value={String(t.hours || 2)} onChange={(_, v) => update({ ...t, hours: Number(v) || 2 })} />
+                  <NumberBox label="Hours" min={0.5} max={12} step={0.5} value={String(t.hours || 2)} onChange={(_, v) => update({ ...t, hours: Number(v) || 2 })} />
                   <TextField label="Start time" type="time" value={t.startTime || '09:00'} onChange={(_, v) => update({ ...t, startTime: v || '09:00' })} />
                 </>
               )}
@@ -43,7 +43,7 @@ export function TemplatesAdmin(props: ISectionProps): JSX.Element {
                 options={[{ key: 'none', text: 'Does not repeat' }, { key: 'weekly', text: 'Weekly' }, { key: 'biweekly', text: 'Bi-weekly' }, { key: 'monthly', text: 'Monthly' }]}
                 onChange={(_, o) => o && update({ ...t, recurrence: o.key === 'none' ? undefined : { freq: o.key as RecurrenceFreq, weekdays: (t.recurrence && t.recurrence.weekdays) || [], count: (t.recurrence && t.recurrence.count) || 4 } })}
               />
-              {t.recurrence && <SpinButton label="Times" min={1} max={52} value={String(t.recurrence.count || 4)} onChange={(_, v) => update({ ...t, recurrence: { ...(t.recurrence as NonNullable<ILeaveTemplate['recurrence']>), count: Number(v) || 4 } })} />}
+              {t.recurrence && <NumberBox label="Times" min={1} max={52} value={String(t.recurrence.count || 4)} onChange={(_, v) => update({ ...t, recurrence: { ...(t.recurrence as NonNullable<ILeaveTemplate['recurrence']>), count: Number(v) || 4 } })} />}
             </div>
             {t.recurrence && <div className="to-small to-muted" style={{ marginTop: 6 }}>{describeRecurrence(t.recurrence)}</div>}
           </Card>

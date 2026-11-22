@@ -80,6 +80,9 @@ export function SetupWizard(props: IProps): JSX.Element {
         add(`${emps.length} sample employees with requests`, 'success');
       }
       await props.settings.setJson(SETTING_KEYS.config, cfg);
+      // The year before installation has nothing to carry forward.
+      const thisYear = new Date().getMonth() + 1 >= month ? new Date().getFullYear() : new Date().getFullYear() - 1;
+      if (!props.settings.get(SETTING_KEYS.carriedYears)) await props.settings.setJson(SETTING_KEYS.carriedYears, [thisYear - 1]);
       if (!props.settings.get(SETTING_KEYS.installedAt)) await props.settings.set(SETTING_KEYS.installedAt, new Date().toISOString());
       await props.settings.set(SETTING_KEYS.installedBy, props.me.email);
       await props.settings.set(SETTING_KEYS.appVersion, props.appVersion);

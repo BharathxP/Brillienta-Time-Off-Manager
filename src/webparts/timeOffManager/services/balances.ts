@@ -245,6 +245,12 @@ export function computeBalance(
   return { ...base, annual: p.annual, entitled: p.entitled, tenureExtra: p.tenureExtra, carried, adjusted, used, pending, available: round2(pool - used - pending) };
 }
 
+/** What a request may use: the available balance, plus (accrual with book-ahead) what is still to accrue this leave year. */
+export function bookable(type: ILeaveType, b: IBalance): { available: number; ahead: number } {
+  const ahead = type.entitlement.mode === 'accrual' && type.entitlement.bookAhead !== false ? Math.max(0, round2((b.annual || 0) - (b.entitled || 0))) : 0;
+  return { available: round2(b.available + ahead), ahead };
+}
+
 /** Days to carry from a finished year into the next: what was left, up to the type's limit. */
 export function carryForwardDays(type: ILeaveType, closing: IBalance): number {
   const max = type.entitlement.carryForwardMax;

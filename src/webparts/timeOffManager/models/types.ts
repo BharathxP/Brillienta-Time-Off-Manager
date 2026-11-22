@@ -68,6 +68,8 @@ export interface IEntitlement {
   maxBalance: number;
   /** Earned credits (comp off) lapse this many days after they are earned (0 = never). */
   expiryDays: number;
+  /** Accrual: requests may use what will have accrued by the end of the leave year (not only what has accrued so far). */
+  bookAhead?: boolean;
 }
 
 export interface ILeaveType {

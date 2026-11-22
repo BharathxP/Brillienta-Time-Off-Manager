@@ -2,7 +2,7 @@
 // (unit tested in tests/requests.test.cjs).
 
 import { IBlackout, IConfig, IEmployee, ILeaveRequest, ILeaveType, IRecurrence, LeaveUnit, PartialDays } from '../models/types';
-import { IBalance } from './balances';
+import { IBalance, bookable } from './balances';
 import { addDays, addMonths, calendarFor, countDays, daysBetween, eachDay, fmtDate, isIsoDate, isWorkingDay, leaveYearOf, weekday, WEEKDAY_SHORT } from './dates';
 import { lc } from './workflow';
 
@@ -175,10 +175,12 @@ export function validateDraft(
     errors.push(`Attach a supporting document (needed for ${type.name} over ${type.attachmentOverDays} day${type.attachmentOverDays === 1 ? '' : 's'}).`);
   }
   if (balance && !balance.unlimited) {
-    const after = balance.available - dur.days;
+    const can = bookable(type, balance);
+    const after = can.available - dur.days;
     if (after < -type.allowNegative - 1e-9) {
-      errors.push(`Not enough ${type.name}: ${round2(balance.available)} available, ${dur.days} requested.`);
+      errors.push(`Not enough ${type.name}: ${round2(can.available)} available${can.ahead ? ` (including ${round2(can.ahead)} still to accrue this year)` : ''}, ${dur.days} requested.`);
     } else if (after < 0) warnings.push(`This takes the balance to ${round2(after)} days.`);
+    else if (balance.available - dur.days < 0 && can.ahead) warnings.push(`Uses ${round2(dur.days - Math.max(0, balance.available))} day(s) that accrue later this leave year.`);
   }
   const clash = overlapping(existing.filter((r) => !ctx || r.id !== ctx.excludeId), d);
   if (clash.length) errors.push(`You already have time off on these days (${clash.map((r) => fmtDate(r.start)).join(', ')}).`);

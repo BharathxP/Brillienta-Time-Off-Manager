@@ -1,11 +1,11 @@
 import * as React from 'react';
-import { Checkbox, ChoiceGroup, DatePicker, DayOfWeek, DefaultButton, Dropdown, Icon, IDropdownOption, MessageBar, MessageBarType, Panel, PanelType, PrimaryButton, SpinButton, TextField } from '@fluentui/react';
+import { Checkbox, ChoiceGroup, DatePicker, DayOfWeek, DefaultButton, Dropdown, Icon, IDropdownOption, MessageBar, MessageBarType, Panel, PanelType, PrimaryButton, TextField } from '@fluentui/react';
 import { IRequestFormOptions, useApp } from '../AppContext';
 import { ILeaveTemplate, IRecurrence, LeaveUnit, PartialDays, RecurrenceFreq } from '../../models/types';
-import { EmployeePicker, TypeChip } from '../common/Ui';
+import { EmployeePicker, TypeChip, NumberBox } from '../common/Ui';
 import { addDays, fmtDate, fmtDays, fmtNum, leaveYearOf, today, WEEKDAY_SHORT, calendarFor, addTime } from '../../services/dates';
 import { IDraft, duration, occurrences, validateDraft, describeRecurrence, teamClash } from '../../services/requests';
-import { computeBalance } from '../../services/balances';
+import { bookable, computeBalance } from '../../services/balances';
 import { buildSteps, lc } from '../../services/workflow';
 
 export function isoToDate(iso: string): Date | undefined {
@@ -19,6 +19,20 @@ export function dateToIso(d: Date | null | undefined): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+const MONTHS3 = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+/** A typed date: "2026-12-07", "7/12/2026" (day first), "7 Dec 2026" or "Mon, 7 Dec 2026". */
+export function parseTypedDate(text: string): string {
+  const t = (text || '').trim().toLowerCase().replace(/^[a-z]{3},?\s+/, '');
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  m = /^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/.exec(t);
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  m = /^(\d{1,2})\s+([a-z]{3})[a-z]*\s+(\d{4})$/.exec(t);
+  if (m && MONTHS3.indexOf(m[2]) >= 0) return `${m[3]}-${String(MONTHS3.indexOf(m[2]) + 1).padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  return '';
+}
+
 export function IsoDatePicker(props: { label: string; value: string; onChange: (v: string) => void; minDate?: string; maxDate?: string; required?: boolean }): JSX.Element {
   const { config } = useApp();
   return (
@@ -26,12 +40,18 @@ export function IsoDatePicker(props: { label: string; value: string; onChange: (
       label={props.label}
       isRequired={props.required}
       value={isoToDate(props.value)}
-      onSelectDate={(d) => props.onChange(dateToIso(d))}
+      // Fluent reports a blank date when an empty box loses focus: that is not a choice, so it is ignored.
+      onSelectDate={(d) => d && props.onChange(dateToIso(d))}
       formatDate={(d) => (d ? fmtDate(dateToIso(d), true) : '')}
       firstDayOfWeek={config.weekStartsOn === 0 ? DayOfWeek.Sunday : DayOfWeek.Monday}
       minDate={props.minDate ? isoToDate(props.minDate) : undefined}
       maxDate={props.maxDate ? isoToDate(props.maxDate) : undefined}
-      allowTextInput={false}
+      allowTextInput
+      parseDateFromString={(text) => {
+        const iso = parseTypedDate(text);
+        return iso ? (isoToDate(iso) as Date) : null;
+      }}
+      textField={{ 'data-iso': props.value } as never}
     />
   );
 }
@@ -341,7 +361,7 @@ export function RequestForm(props: { options: IRequestFormOptions; onClose: () =
               )}
               {rec.freq !== 'none' && (
                 <div className="to-form-grid">
-                  <SpinButton label="Times" min={1} max={52} value={String(rec.count || '')} onChange={(_, val) => setRec({ count: Number(val) || undefined, until: undefined })} />
+                  <NumberBox label="Times" min={1} max={52} value={String(rec.count || '')} onChange={(_, val) => setRec({ count: Number(val) || undefined, until: undefined })} />
                   <IsoDatePicker label="…or until" value={rec.until || ''} onChange={(d) => setRec({ until: d, count: undefined })} minDate={draft.start} />
                 </div>
               )}
@@ -381,6 +401,9 @@ export function RequestForm(props: { options: IRequestFormOptions; onClose: () =
                 <strong>
                   {fmtNum(bal.available)} → <span className={bal.available - dur.days < 0 ? 'to-danger' : ''}>{fmtNum(bal.available - dur.days * starts.length)}</span>
                 </strong>
+              )}
+              {type && !bal.unlimited && bookable(type, bal).ahead > 0 && (
+                <span className="to-small to-muted" style={{ width: '100%' }}>+{fmtNum(bookable(type, bal).ahead)} still to accrue this leave year (can be booked)</span>
               )}
             </div>
           )}

@@ -1,8 +1,8 @@
 import * as React from 'react';
-import { DefaultButton, Dropdown, MessageBar, MessageBarType, Panel, PanelType, PrimaryButton, SearchBox, SpinButton, TextField, Toggle } from '@fluentui/react';
+import { DefaultButton, Dropdown, MessageBar, MessageBarType, Panel, PanelType, PrimaryButton, SearchBox, TextField, Toggle } from '@fluentui/react';
 import { useApp } from '../AppContext';
 import { IEmployee } from '../../models/types';
-import { Card, EmployeePicker, Kpi, PageHeader, PersonLine, useBusy, useConfirm } from '../common/Ui';
+import { Card, EmployeePicker, Kpi, PageHeader, PersonLine, useBusy, useConfirm, NumberBox } from '../common/Ui';
 import { BalanceCards, balanceLines } from '../requests/BalanceCards';
 import { IsoDatePicker } from '../requests/RequestForm';
 import { fmtDate, fmtNum, isIsoDate, leaveYearLabel } from '../../services/dates';
@@ -336,7 +336,7 @@ export function BalancePanel(props: { employee: IEmployee; onClose: () => void; 
                 ))}
               </div>
             )}
-            <SpinButton label={t && t.entitlement.mode === 'earned' ? 'Grant comp-off days (use − to remove)' : 'Days to add (use − to deduct)'} value={String(days)} step={0.5} min={-365} max={365} onChange={(_, v) => setDays(Number(v) || 0)} />
+            <NumberBox label={t && t.entitlement.mode === 'earned' ? 'Grant comp-off days (use − to remove)' : 'Days to add (use − to deduct)'} value={String(days)} step={0.5} min={-365} max={365} onChange={(_, v) => setDays(Number(v) || 0)} />
             <TextField label="Note" value={note} onChange={(_, v) => setNote(v || '')} placeholder="e.g. Joining bonus, correction, special grant" />
             <PrimaryButton text="Save adjustment" disabled={busy || !days} onClick={() => void adjust()} />
           </div>
@@ -418,7 +418,7 @@ function BulkAdjust(props: { onClose: () => void }): JSX.Element {
         <Dropdown label="Department" selectedKey={dept} options={[{ key: '', text: 'Everyone' }].concat(departments.map((d) => ({ key: d, text: d })))} onChange={(_, o) => o && setDept(String(o.key))} />
         <Dropdown label="Grade" selectedKey={grade} options={[{ key: '', text: 'Every grade' }].concat(config.grades.map((g) => ({ key: g, text: g })))} onChange={(_, o) => o && setGrade(String(o.key))} />
         <Dropdown label="Leave type" selectedKey={type} options={config.leaveTypes.filter((t) => t.active && t.entitlement.mode !== 'unlimited').map((t) => ({ key: t.key, text: t.name }))} onChange={(_, o) => o && setType(String(o.key))} />
-        <SpinButton label={`Days for leave year ${leaveYearLabel(year, config.yearStartMonth)} (use − to deduct)`} value={String(days)} step={0.5} min={-365} max={365} onChange={(_, v) => setDays(Number(v) || 0)} />
+        <NumberBox label={`Days for leave year ${leaveYearLabel(year, config.yearStartMonth)} (use − to deduct)`} value={String(days)} step={0.5} min={-365} max={365} onChange={(_, v) => setDays(Number(v) || 0)} />
         <TextField label="Note" value={note} onChange={(_, v) => setNote(v || '')} placeholder="e.g. Company anniversary day" />
         <div className="to-small to-muted">{people.length} active people match. Each gets a ledger entry, so it can be undone person by person.</div>
       </div>

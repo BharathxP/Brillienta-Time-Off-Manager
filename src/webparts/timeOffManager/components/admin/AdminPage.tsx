@@ -1,8 +1,8 @@
 import * as React from 'react';
-import { DefaultButton, Dropdown, Icon, MessageBar, MessageBarType, PrimaryButton, SpinButton, TextField, Toggle } from '@fluentui/react';
+import { DefaultButton, Dropdown, Icon, MessageBar, MessageBarType, PrimaryButton, TextField, Toggle } from '@fluentui/react';
 import { useApp } from '../AppContext';
 import { IConfig } from '../../models/types';
-import { Card, PageHeader, PeopleField, useBusy, useConfirm } from '../common/Ui';
+import { Card, PageHeader, PeopleField, useBusy, useConfirm, NumberBox } from '../common/Ui';
 import { LeaveTypesAdmin } from './LeaveTypesAdmin';
 import { WorkflowsAdmin } from './WorkflowsAdmin';
 import { CalendarsAdmin } from './CalendarsAdmin';
@@ -201,7 +201,7 @@ function GeneralAdmin(props: ISectionProps): JSX.Element {
           <Toggle label="Employees may claim comp off for extra days worked" checked={draft.compOff.enabled} onChange={(_, c) => set({ compOff: { ...draft.compOff, enabled: !!c } })} />
           <Dropdown label="Credited to" selectedKey={draft.compOff.leaveType} options={draft.leaveTypes.filter((t) => t.entitlement.mode === 'earned').map((t) => ({ key: t.key, text: t.name }))} onChange={(_, o) => o && set({ compOff: { ...draft.compOff, leaveType: String(o.key) } })} />
           <Toggle label="Only for work on weekends, non-working days and holidays" checked={draft.compOff.requireNonWorkingDay} onChange={(_, c) => set({ compOff: { ...draft.compOff, requireNonWorkingDay: !!c } })} />
-          <SpinButton label="Most days per claim (0 = no limit)" min={0} max={30} value={String(draft.compOff.maxDaysPerClaim)} onChange={(_, v) => set({ compOff: { ...draft.compOff, maxDaysPerClaim: Number(v) || 0 } })} />
+          <NumberBox label="Most days per claim (0 = no limit)" min={0} max={30} value={String(draft.compOff.maxDaysPerClaim)} onChange={(_, v) => set({ compOff: { ...draft.compOff, maxDaysPerClaim: Number(v) || 0 } })} />
           <div className="to-small to-muted">How long credits stay valid is set on the comp-off leave type (Leave types › expiry).</div>
         </div>
       </Card>
@@ -246,11 +246,11 @@ function NotificationsAdmin(props: ISectionProps): JSX.Element {
         <div className="to-stack">
           <Toggle label="Remind approvers about requests waiting for them" checked={r.enabled} onChange={(_, c) => setR({ enabled: !!c })} />
           <div className="to-form-grid">
-            <SpinButton label="First reminder after (hours)" min={1} max={720} value={String(r.afterHours)} onChange={(_, v) => setR({ afterHours: Number(v) || 24 })} />
-            <SpinButton label="Repeat every (hours)" min={1} max={720} value={String(r.repeatHours)} onChange={(_, v) => setR({ repeatHours: Number(v) || 24 })} />
-            <SpinButton label="At most (reminders)" min={1} max={20} value={String(r.maxReminders)} onChange={(_, v) => setR({ maxReminders: Number(v) || 3 })} />
-            <SpinButton label="Escalate to HR after (hours, 0 = never)" min={0} max={2000} value={String(r.escalateAfterHours)} onChange={(_, v) => setR({ escalateAfterHours: Number(v) || 0 })} />
-            <SpinButton label="Auto-approve after (hours without a decision, 0 = never)" min={0} max={2000} value={String(draft.autoApproveAfterHours)} onChange={(_, v) => setDraft({ ...draft, autoApproveAfterHours: Number(v) || 0 })} />
+            <NumberBox label="First reminder after (hours)" min={1} max={720} value={String(r.afterHours)} onChange={(_, v) => setR({ afterHours: Number(v) || 24 })} />
+            <NumberBox label="Repeat every (hours)" min={1} max={720} value={String(r.repeatHours)} onChange={(_, v) => setR({ repeatHours: Number(v) || 24 })} />
+            <NumberBox label="At most (reminders)" min={1} max={20} value={String(r.maxReminders)} onChange={(_, v) => setR({ maxReminders: Number(v) || 3 })} />
+            <NumberBox label="Escalate to HR after (hours, 0 = never)" min={0} max={2000} value={String(r.escalateAfterHours)} onChange={(_, v) => setR({ escalateAfterHours: Number(v) || 0 })} />
+            <NumberBox label="Auto-approve after (hours without a decision, 0 = never)" min={0} max={2000} value={String(draft.autoApproveAfterHours)} onChange={(_, v) => setDraft({ ...draft, autoApproveAfterHours: Number(v) || 0 })} />
           </div>
           <div className="to-small to-muted">
             Reminders run at most once an hour, whenever someone opens the app. For reminders on a fixed schedule, add the scheduled flow described under Power Automate & API.

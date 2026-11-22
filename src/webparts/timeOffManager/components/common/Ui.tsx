@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ComboBox, DefaultButton, Dialog, DialogFooter, DialogType, IComboBoxOption, Icon, MessageBar, MessageBarType, PrimaryButton, Spinner, SpinnerSize, TextField } from '@fluentui/react';
+import { ComboBox, DefaultButton, Dialog, DialogFooter, DialogType, IComboBoxOption, Icon, ISpinButtonProps, MessageBar, MessageBarType, PrimaryButton, SpinButton, Spinner, SpinnerSize, TextField } from '@fluentui/react';
 import { IEmployee, ILeaveType, IPerson, RequestStatus } from '../../models/types';
 import { useApp } from '../AppContext';
 import { lc } from '../../services/workflow';
@@ -297,4 +297,21 @@ export function useBusy(): [boolean, (work: () => Promise<unknown>, success?: st
     [toast]
   );
   return [busy, run];
+}
+
+/**
+ * Number input. Fluent's SpinButton calls onChange with `undefined` when the value has not changed (for example when
+ * the box loses focus after typing), which would otherwise reset settings to their defaults or drop a recurrence's
+ * count. This wrapper only passes real values on.
+ */
+export function NumberBox(props: ISpinButtonProps): JSX.Element {
+  const { onChange, ...rest } = props;
+  return (
+    <SpinButton
+      {...rest}
+      onChange={(ev, value) => {
+        if (value !== undefined && value !== '' && onChange) onChange(ev, value);
+      }}
+    />
+  );
 }

@@ -27,7 +27,7 @@ export function MyRequests(): JSX.Element {
   }, [route.query.id, world.requests]);
   const rows =
     tab === 'upcoming'
-      ? mine.filter((r) => r.kind === 'leave' && r.end >= today() && r.status !== 'Cancelled' && r.status !== 'Rejected').sort((a, b) => (a.start < b.start ? -1 : 1))
+      ? mine.filter((r) => r.kind === 'leave' && r.end >= today() && r.status !== 'Cancelled').sort((a, b) => (a.start < b.start ? -1 : 1))
       : tab === 'compoff'
         ? mine.filter((r) => r.kind === 'compoff' || r.leaveType === config.compOff.leaveType)
         : mine.filter((r) => r.leaveYear === viewYear);

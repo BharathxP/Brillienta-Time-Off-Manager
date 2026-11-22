@@ -1,8 +1,8 @@
 import * as React from 'react';
-import { Checkbox, DefaultButton, IconButton, PrimaryButton, SpinButton, TextField, Toggle } from '@fluentui/react';
+import { Checkbox, DefaultButton, IconButton, PrimaryButton, TextField, Toggle } from '@fluentui/react';
 import { IHoliday, IWorkCalendar } from '../../models/types';
 import { ISectionProps } from './AdminPage';
-import { Card } from '../common/Ui';
+import { Card, NumberBox } from '../common/Ui';
 import { IsoDatePicker } from '../requests/RequestForm';
 import { fmtDate, isIsoDate, WEEKDAY_SHORT } from '../../services/dates';
 import { parseCsv } from '../../services/exporting';
@@ -72,7 +72,7 @@ function CalendarCard(props: { cal: IWorkCalendar; isDefault: boolean; onChange:
       <div className="to-form-grid">
         <TextField label="Name" value={c.name} onChange={(_, v) => set({ name: v || '' })} />
         <TextField label="Key (used in the employee list and CSV)" value={c.key} readOnly />
-        <SpinButton label="Hours per working day" min={1} max={24} step={0.5} value={String(c.hoursPerDay)} onChange={(_, v) => set({ hoursPerDay: Number(v) || 8 })} />
+        <NumberBox label="Hours per working day" min={1} max={24} step={0.5} value={String(c.hoursPerDay)} onChange={(_, v) => set({ hoursPerDay: Number(v) || 8 })} />
         <TextField label="Day starts at" type="time" value={c.dayStart} onChange={(_, v) => set({ dayStart: v || '09:00' })} />
       </div>
       <div style={{ marginTop: 12 }}>

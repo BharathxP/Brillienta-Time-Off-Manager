@@ -1,7 +1,7 @@
 import * as React from 'react';
-import { DefaultButton, Icon, MessageBar, MessageBarType, PrimaryButton, SpinButton, TextField } from '@fluentui/react';
+import { DefaultButton, Icon, MessageBar, MessageBarType, PrimaryButton, TextField } from '@fluentui/react';
 import { useApp } from '../AppContext';
-import { Card, Kpi, useBusy } from '../common/Ui';
+import { Card, Kpi, useBusy, NumberBox } from '../common/Ui';
 import { PRICING, checkLicenseKey, describeStatus, quote } from '../../services/licensing/license';
 import { LICENSE_PUBLIC_KEY } from '../../services/licensing/publicKey';
 import { SETTING_KEYS } from '../../services/SettingsStore';
@@ -88,7 +88,7 @@ export function LicenseAdmin(): JSX.Element {
               </div>
               <div>Free updates with support · Unlimited support</div>
             </div>
-            <SpinButton label="Users you need" min={1} max={100000} step={10} value={String(users)} onChange={(_, v) => setUsers(Number(v) || 1)} />
+            <NumberBox label="Users you need" min={1} max={100000} step={10} value={String(users)} onChange={(_, v) => setUsers(Number(v) || 1)} />
             <div className="to-calc">
               <div>
                 <span>Users above the base plan</span>

@@ -13,7 +13,7 @@ import { Engine, IWorld } from '../services/Engine';
 import { mergeConfig } from '../schema/defaults';
 import { SCHEMA_VERSION, listTitle } from '../schema/schema';
 import { indexEmployees, lc } from '../services/workflow';
-import { leaveYearOf, today } from '../services/dates';
+import { leaveYearOf, leaveYearStart, today } from '../services/dates';
 import { ILicenseStatus, checkLicenseKey, licenseStatus, licensedEmails } from '../services/licensing/license';
 import { LICENSE_PUBLIC_KEY } from '../services/licensing/publicKey';
 import { DEFAULT_LOGO } from '../assets/defaultLogo';
@@ -179,6 +179,28 @@ export default function App(props: IAppProps): JSX.Element {
     setWorld(w);
   }, [loadWorld]);
 
+  // Keep an open page current: other people submit, approve and cancel while it is open. Refresh when the tab comes
+  // back into view and every two minutes while it is visible (requests, balances, approvals, the bell).
+  React.useEffect(() => {
+    if (phase.kind !== 'ready') return undefined;
+    let last = Date.now();
+    const refresh = (): void => {
+      if (document.hidden || Date.now() - last < 15000) return;
+      last = Date.now();
+      reload()
+        .then(() => setNotificationsTick((t) => t + 1))
+        .catch(() => undefined);
+    };
+    const timer = window.setInterval(refresh, 120000);
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [phase.kind, reload]);
+
   const saveConfig = React.useCallback(
     async (next: IConfig, what?: string) => {
       await settings.setJson(SETTING_KEYS.config, next);
@@ -231,7 +253,10 @@ export default function App(props: IAppProps): JSX.Element {
       }
       const year = leaveYearOf(today(), config.yearStartMonth);
       const carried = settings.getJson<number[]>(SETTING_KEYS.carriedYears) || [];
-      if (isHr && carried.indexOf(year - 1) < 0 && world.employees.length) {
+      // Only years that ended after installation: a new site has no unused balance from before it existed.
+      const installed = settings.get(SETTING_KEYS.installedAt) || '';
+      const installedBeforeThisYear = !!installed && installed.substring(0, 10) < leaveYearStart(year, config.yearStartMonth);
+      if (isHr && carried.indexOf(year - 1) < 0 && world.employees.length && installedBeforeThisYear) {
         await settings.setJson(SETTING_KEYS.carriedYears, carried.concat(year - 1));
         const n = await engine.carryForward(world, year - 1, { email: me.email, name: me.title }, () => undefined);
         if (n) toast(`${n} balance${n === 1 ? '' : 's'} carried forward into ${year}.`, 'info');

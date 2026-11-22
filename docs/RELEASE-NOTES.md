@@ -1,5 +1,18 @@
 # Release notes
 
+## 1.1.1 — fixes from end-to-end testing
+
+- Open pages refresh their data when the tab regains focus and every 2 minutes (approvers saw stale lists).
+- Accrual leave can be booked against what accrues later in the leave year (next year's leave was refused with
+  "0 available"); setting per leave type.
+- A new installation no longer carries forward the previous year's full entitlement.
+- Number boxes no longer reset to their defaults when they lose focus (e.g. a recurrence of 3 created 26 requests;
+  admin settings could revert).
+- An empty date box losing focus no longer clears related values.
+- Declined future requests stay visible under "Upcoming".
+- Date boxes accept typed dates (2026-12-07, 7/12/2026, 7 Dec 2026).
+- New: `npm run e2e` — 30 multi-user scenarios against a strict SharePoint emulator; docs/TENANT-TEST-PLAN.md.
+
 ## 1.1.0
 
 - Change a pending request; the approval restarts and the history records the change.

@@ -1,8 +1,8 @@
 import * as React from 'react';
-import { DefaultButton, Dropdown, Icon, IconButton, PrimaryButton, SpinButton, TextField } from '@fluentui/react';
+import { DefaultButton, Dropdown, Icon, IconButton, PrimaryButton, TextField } from '@fluentui/react';
 import { ApproverKind, IApprovalLevel, IWorkflow } from '../../models/types';
 import { ISectionProps } from './AdminPage';
-import { Card, PeopleField } from '../common/Ui';
+import { Card, PeopleField, NumberBox } from '../common/Ui';
 
 const KINDS: Array<{ key: ApproverKind; text: string }> = [
   { key: 'manager', text: 'Manager' },
@@ -55,7 +55,7 @@ export function WorkflowsAdmin(props: ISectionProps): JSX.Element {
                     <div className="to-form-grid">
                       <Dropdown label="Approver" selectedKey={l.kind} options={KINDS} onChange={(_, o) => o && setLevel(i, { kind: o.key as ApproverKind, label: l.label || o.text })} />
                       <TextField label="Label" value={l.label} onChange={(_, v) => setLevel(i, { label: v || '' })} />
-                      <SpinButton label="Only from (days, 0 = always)" min={0} max={365} step={0.5} value={String(l.minDays)} onChange={(_, v) => setLevel(i, { minDays: Number(v) || 0 })} />
+                      <NumberBox label="Only from (days, 0 = always)" min={0} max={365} step={0.5} value={String(l.minDays)} onChange={(_, v) => setLevel(i, { minDays: Number(v) || 0 })} />
                       {l.kind === 'person' && <PeopleField single label="Person" value={l.person ? [l.person] : []} onChange={(v) => setLevel(i, { person: v[0] })} />}
                     </div>
                   </div>

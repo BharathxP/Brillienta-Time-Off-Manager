@@ -14,6 +14,7 @@ function ent(partial: Partial<IEntitlement>): IEntitlement {
     carryForwardMax: 0,
     maxBalance: 0,
     expiryDays: 0,
+    bookAhead: true,
     ...partial
   };
 }

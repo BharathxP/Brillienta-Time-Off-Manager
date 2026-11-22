@@ -72,3 +72,12 @@ test('Excel workbook and Power Automate flow package are valid zips', () => {
   const z = flowPackageZip({ siteUrl: 'https://contoso.sharepoint.com/sites/hr', listId: '00000000-0000-0000-0000-000000000000', listTitle: 'TO_EmailQueue', displayName: 'Send', sharedMailbox: '', allowedDomains: [], useReplyTo: false });
   assert.strictEqual(String.fromCharCode(z[0], z[1]), 'PK');
 });
+
+test('book ahead: accrual types may use what accrues later in the leave year', () => {
+  const t = type('annual');
+  const b = { available: 0, annual: 20, entitled: 0, unlimited: false, eligible: true };
+  assert.deepStrictEqual(bal.bookable(t, b), { available: 20, ahead: 20 });
+  const off = { ...t, entitlement: { ...t.entitlement, bookAhead: false } };
+  assert.deepStrictEqual(bal.bookable(off, b), { available: 0, ahead: 0 });
+  assert.strictEqual(bal.bookable(type('casual'), { ...b, available: 3 }).available, 3);
+});

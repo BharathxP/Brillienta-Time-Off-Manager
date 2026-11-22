@@ -1,9 +1,9 @@
 import * as React from 'react';
-import { Checkbox, DefaultButton, Dropdown, Icon, IconButton, Panel, PanelType, Pivot, PivotItem, PrimaryButton, SearchBox, SpinButton, TextField, Toggle } from '@fluentui/react';
+import { Checkbox, DefaultButton, Dropdown, Icon, IconButton, Panel, PanelType, Pivot, PivotItem, PrimaryButton, SearchBox, TextField, Toggle } from '@fluentui/react';
 import { ILeaveType } from '../../models/types';
 import { ISectionProps } from './AdminPage';
 import { blankLeaveType } from '../../schema/leaveTypes';
-import { Card, TypeChip } from '../common/Ui';
+import { Card, TypeChip, NumberBox } from '../common/Ui';
 
 const MODES = [
   { key: 'fixed', text: 'Fixed days per leave year' },
@@ -163,13 +163,14 @@ function LeaveTypeEditor(p: { type: ILeaveType; props: ISectionProps; onChange: 
             <Dropdown label="How the balance is built" selectedKey={e.mode} options={MODES} onChange={(_, o) => o && setE({ mode: o.key as ILeaveType['entitlement']['mode'] })} />
             {(e.mode === 'fixed' || e.mode === 'accrual') && (
               <>
-                <SpinButton label="Days per leave year (standard)" min={0} max={400} step={0.5} value={String(e.days)} onChange={(_, v) => setE({ days: num(v) })} />
+                <NumberBox label="Days per leave year (standard)" min={0} max={400} step={0.5} value={String(e.days)} onChange={(_, v) => setE({ days: num(v) })} />
                 {e.mode === 'accrual' && (
                   <div className="to-form-grid">
                     <Dropdown label="Accrues" selectedKey={e.accrual.frequency} options={[{ key: 'monthly', text: 'Monthly' }, { key: 'biweekly', text: 'Bi-weekly (26 periods)' }, { key: 'quarterly', text: 'Quarterly' }, { key: 'yearly', text: 'Yearly' }]} onChange={(_, o) => o && setE({ accrual: { ...e.accrual, frequency: o.key as 'monthly' } })} />
                     <Dropdown label="Credited at the" selectedKey={e.accrual.timing} options={[{ key: 'start', text: 'Start of each period' }, { key: 'end', text: 'End of each period' }]} onChange={(_, o) => o && setE({ accrual: { ...e.accrual, timing: o.key as 'start' } })} />
                   </div>
                 )}
+                {e.mode === 'accrual' && <Toggle label="Employees may book against what accrues later in the leave year" checked={e.bookAhead !== false} onChange={(_, c) => setE({ bookAhead: !!c })} />}
                 <Toggle label={e.mode === 'accrual' ? 'New joiners accrue from their start date' : 'Prorate the first year by the start date'} checked={e.prorate} onChange={(_, c) => setE({ prorate: !!c })} />
                 <div>
                   <div className="to-label">Level / grade based days (empty = the standard days)</div>
@@ -195,9 +196,9 @@ function LeaveTypeEditor(p: { type: ILeaveType; props: ISectionProps; onChange: 
                   {e.tenure.map((tier, i) => (
                     <div key={i} className="to-row" style={{ marginBottom: 6 }}>
                       <span>After</span>
-                      <SpinButton min={0} max={50} value={String(tier.years)} onChange={(_, v) => setE({ tenure: e.tenure.map((x, j) => (j === i ? { ...x, years: num(v) } : x)) })} styles={{ root: { width: 90 } }} />
+                      <NumberBox min={0} max={50} value={String(tier.years)} onChange={(_, v) => setE({ tenure: e.tenure.map((x, j) => (j === i ? { ...x, years: num(v) } : x)) })} styles={{ root: { width: 90 } }} />
                       <span>years:</span>
-                      <SpinButton min={0} max={100} step={0.5} value={String(tier.extraDays)} onChange={(_, v) => setE({ tenure: e.tenure.map((x, j) => (j === i ? { ...x, extraDays: num(v) } : x)) })} styles={{ root: { width: 90 } }} />
+                      <NumberBox min={0} max={100} step={0.5} value={String(tier.extraDays)} onChange={(_, v) => setE({ tenure: e.tenure.map((x, j) => (j === i ? { ...x, extraDays: num(v) } : x)) })} styles={{ root: { width: 90 } }} />
                       <span>extra days</span>
                       <IconButton iconProps={{ iconName: 'Delete' }} ariaLabel="Remove tier" onClick={() => setE({ tenure: e.tenure.filter((_, j) => j !== i) })} />
                     </div>
@@ -205,14 +206,14 @@ function LeaveTypeEditor(p: { type: ILeaveType; props: ISectionProps; onChange: 
                   <DefaultButton iconProps={{ iconName: 'Add' }} text="Add tier" onClick={() => setE({ tenure: e.tenure.concat({ years: (e.tenure.length ? e.tenure[e.tenure.length - 1].years : 0) + 2, extraDays: 1 }) })} />
                 </div>
                 <div className="to-form-grid">
-                  <SpinButton label="Carry forward at most (days, −1 = all)" min={-1} max={400} value={String(e.carryForwardMax)} onChange={(_, v) => setE({ carryForwardMax: Number(v) })} />
-                  <SpinButton label="Balance cap (0 = none)" min={0} max={400} value={String(e.maxBalance)} onChange={(_, v) => setE({ maxBalance: num(v) })} />
+                  <NumberBox label="Carry forward at most (days, −1 = all)" min={-1} max={400} value={String(e.carryForwardMax)} onChange={(_, v) => setE({ carryForwardMax: Number(v) })} />
+                  <NumberBox label="Balance cap (0 = none)" min={0} max={400} value={String(e.maxBalance)} onChange={(_, v) => setE({ maxBalance: num(v) })} />
                 </div>
               </>
             )}
             {e.mode === 'earned' && (
               <>
-                <SpinButton label="Credits lapse after (days, 0 = never)" min={0} max={730} value={String(e.expiryDays)} onChange={(_, v) => setE({ expiryDays: num(v) })} />
+                <NumberBox label="Credits lapse after (days, 0 = never)" min={0} max={730} value={String(e.expiryDays)} onChange={(_, v) => setE({ expiryDays: num(v) })} />
                 <Toggle label="This is the comp-off type employees claim into" checked={!!t.isCompOff} onChange={(_, c) => set({ isCompOff: !!c })} />
               </>
             )}
@@ -221,11 +222,11 @@ function LeaveTypeEditor(p: { type: ILeaveType; props: ISectionProps; onChange: 
         <PivotItem headerText="Rules">
           <div className="to-stack" style={{ marginTop: 12 }}>
             <div className="to-form-grid">
-              <SpinButton label="Notice needed (days)" min={0} max={365} value={String(t.minNoticeDays)} onChange={(_, v) => set({ minNoticeDays: num(v) })} />
-              <SpinButton label="Longest request (days, 0 = any)" min={0} max={400} value={String(t.maxConsecutiveDays)} onChange={(_, v) => set({ maxConsecutiveDays: num(v) })} />
-              <SpinButton label="May go negative by (days)" min={0} max={60} step={0.5} value={String(t.allowNegative)} onChange={(_, v) => set({ allowNegative: num(v) })} />
-              <SpinButton label="Document needed over (days, 0 = never)" min={0} max={60} value={String(t.attachmentOverDays)} onChange={(_, v) => set({ attachmentOverDays: num(v) })} />
-              <SpinButton label="Months of service needed" min={0} max={240} value={String(t.eligibility.minServiceMonths)} onChange={(_, v) => set({ eligibility: { ...t.eligibility, minServiceMonths: num(v) } })} />
+              <NumberBox label="Notice needed (days)" min={0} max={365} value={String(t.minNoticeDays)} onChange={(_, v) => set({ minNoticeDays: num(v) })} />
+              <NumberBox label="Longest request (days, 0 = any)" min={0} max={400} value={String(t.maxConsecutiveDays)} onChange={(_, v) => set({ maxConsecutiveDays: num(v) })} />
+              <NumberBox label="May go negative by (days)" min={0} max={60} step={0.5} value={String(t.allowNegative)} onChange={(_, v) => set({ allowNegative: num(v) })} />
+              <NumberBox label="Document needed over (days, 0 = never)" min={0} max={60} value={String(t.attachmentOverDays)} onChange={(_, v) => set({ attachmentOverDays: num(v) })} />
+              <NumberBox label="Months of service needed" min={0} max={240} value={String(t.eligibility.minServiceMonths)} onChange={(_, v) => set({ eligibility: { ...t.eligibility, minServiceMonths: num(v) } })} />
             </div>
             <div>
               <div className="to-label">Only for grades (none ticked = everyone)</div>
@@ -249,7 +250,7 @@ function LeaveTypeEditor(p: { type: ILeaveType; props: ISectionProps; onChange: 
           <div className="to-stack" style={{ marginTop: 12 }}>
             <Dropdown label="Approval workflow" selectedKey={t.workflowKey} options={draft.workflows.map((w) => ({ key: w.key, text: w.name }))} onChange={(_, o) => o && set({ workflowKey: String(o.key) })} />
             <Toggle label="Auto-approve" checked={t.autoApprove.enabled} onChange={(_, c) => set({ autoApprove: { ...t.autoApprove, enabled: !!c } })} />
-            {t.autoApprove.enabled && <SpinButton label="…for requests up to (days, 0 = always)" min={0} max={60} step={0.5} value={String(t.autoApprove.maxDays)} onChange={(_, v) => set({ autoApprove: { ...t.autoApprove, maxDays: num(v) } })} />}
+            {t.autoApprove.enabled && <NumberBox label="…for requests up to (days, 0 = always)" min={0} max={60} step={0.5} value={String(t.autoApprove.maxDays)} onChange={(_, v) => set({ autoApprove: { ...t.autoApprove, maxDays: num(v) } })} />}
           </div>
         </PivotItem>
       </Pivot>

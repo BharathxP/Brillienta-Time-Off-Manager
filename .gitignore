@@ -40,3 +40,5 @@ obj
 # Styles Generated Code
 *.scss.ts
 preview-dist
+e2e-dist
+e2e-results

@@ -1,9 +1,9 @@
 import * as React from 'react';
-import { Checkbox, DefaultButton, Dropdown, IconButton, PrimaryButton, SpinButton, TextField, Toggle } from '@fluentui/react';
+import { Checkbox, DefaultButton, Dropdown, IconButton, PrimaryButton, TextField, Toggle } from '@fluentui/react';
 import { IBlackout } from '../../models/types';
 import { ISectionProps } from './AdminPage';
 import { useApp } from '../AppContext';
-import { Card } from '../common/Ui';
+import { Card, NumberBox } from '../common/Ui';
 import { IsoDatePicker } from '../requests/RequestForm';
 import { addDays, fmtDate, today } from '../../services/dates';
 
@@ -59,8 +59,8 @@ export function RulesAdmin(props: ISectionProps): JSX.Element {
         <div className="to-stack">
           <Toggle label="Limit how many people of a department may be away on the same day" checked={st.enabled} onChange={(_, c) => setSt({ enabled: !!c })} />
           <div className="to-form-grid">
-            <SpinButton label="At most (% of the department, 0 = no % limit)" min={0} max={100} step={5} value={String(st.maxAwayPercent)} onChange={(_, v) => setSt({ maxAwayPercent: Number(v) || 0 })} />
-            <SpinButton label="At most (people, 0 = no count limit)" min={0} max={500} value={String(st.maxAwayCount)} onChange={(_, v) => setSt({ maxAwayCount: Number(v) || 0 })} />
+            <NumberBox label="At most (% of the department, 0 = no % limit)" min={0} max={100} step={5} value={String(st.maxAwayPercent)} onChange={(_, v) => setSt({ maxAwayPercent: Number(v) || 0 })} />
+            <NumberBox label="At most (people, 0 = no count limit)" min={0} max={500} value={String(st.maxAwayCount)} onChange={(_, v) => setSt({ maxAwayCount: Number(v) || 0 })} />
             <Dropdown label="When over the limit" selectedKey={st.mode} options={[{ key: 'warn', text: 'Warn the employee and the approver' }, { key: 'block', text: 'Block the request' }]} onChange={(_, o) => o && setSt({ mode: o.key as 'warn' })} />
           </div>
           <div>
