@@ -1,0 +1,15 @@
+// Default logo: a calendar page with a check mark, white on the Brillienta green tile with a lime binding strip
+// (the same family as the Employee Directory badge). Used until an admin uploads their own (Admin › Branding).
+
+export const LOGO_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">' +
+  '<rect width="120" height="120" rx="28" fill="#038f62"/>' +
+  '<rect x="26" y="30" width="68" height="64" rx="12" fill="#ffffff"/>' +
+  '<rect x="26" y="30" width="68" height="18" rx="9" fill="#caf578"/>' +
+  '<rect x="26" y="40" width="68" height="8" fill="#caf578"/>' +
+  '<rect x="40" y="20" width="9" height="20" rx="4.5" fill="#ffffff"/>' +
+  '<rect x="71" y="20" width="9" height="20" rx="4.5" fill="#ffffff"/>' +
+  '<path d="M44 70 l11 11 l22 -22" fill="none" stroke="#038f62" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '</svg>';
+
+export const DEFAULT_LOGO = 'data:image/svg+xml;base64,' + (typeof btoa === 'function' ? btoa(LOGO_SVG) : '');

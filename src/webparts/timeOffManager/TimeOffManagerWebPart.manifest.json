@@ -1,0 +1,30 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx/client-side-web-part-manifest.schema.json",
+  "id": "7c4e2a91-5b3d-4f6e-9a18-2d0c6b5e8f31",
+  "alias": "TimeOffManagerWebPart",
+  "componentType": "WebPart",
+  "version": "*",
+  "manifestVersion": 2,
+  "requiresCustomScript": false,
+  "supportedHosts": ["SharePointWebPart", "SharePointFullPage", "TeamsTab", "TeamsPersonalApp"],
+  "supportsThemeVariants": true,
+  "supportsFullBleed": true,
+  "preconfiguredEntries": [
+    {
+      "groupId": "5c03119e-3074-46fd-976b-c60198311f70",
+      "group": { "default": "Advanced" },
+      "title": { "default": "Brillienta Time Off Manager" },
+      "description": { "default": "Leave requests, balances, multilevel approvals, comp off and the team calendar." },
+      "officeFabricIconFontName": "Airplane",
+      "properties": { "listPrefix": "TO_", "view": "app" }
+    },
+    {
+      "groupId": "5c03119e-3074-46fd-976b-c60198311f70",
+      "group": { "default": "Advanced" },
+      "title": { "default": "Team Leave Calendar" },
+      "description": { "default": "Who is away: the team calendar of Brillienta Time Off Manager." },
+      "officeFabricIconFontName": "CalendarWeek",
+      "properties": { "listPrefix": "TO_", "view": "calendar" }
+    }
+  ]
+}
