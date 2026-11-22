@@ -18,6 +18,7 @@ import { ILicenseStatus, checkLicenseKey, licenseStatus, licensedEmails } from '
 import { LICENSE_PUBLIC_KEY } from '../services/licensing/publicKey';
 import { DEFAULT_LOGO } from '../assets/defaultLogo';
 import { Shell } from './Shell';
+import { Provisioner } from '../services/Provisioner';
 import { SetupWizard } from './setup/SetupWizard';
 import { LicenseLocked } from './admin/LicenseAdmin';
 import { Loading } from './common/Ui';
@@ -140,9 +141,23 @@ export default function App(props: IAppProps): JSX.Element {
       setMe(user);
       const installed = await settings.load();
       const version = Number(settings.get(SETTING_KEYS.schemaVersion) || 0);
-      if (!installed || version < SCHEMA_VERSION) {
+      if (!installed || version < 1) {
         setPhase({ kind: props.permissions.manageLists ? 'setup' : 'notInstalled' });
         return;
+      }
+      svc.schemaVersion = version;
+      if (version < SCHEMA_VERSION && props.permissions.manageLists) {
+        // An update added columns: a site owner's visit adds them (until then the app writes without them).
+        try {
+          const res = await new Provisioner(sp, props.prefix).ensureSchema(() => undefined);
+          if (res.ok) {
+            await settings.set(SETTING_KEYS.schemaVersion, String(SCHEMA_VERSION));
+            await settings.set(SETTING_KEYS.appVersion, props.appVersion);
+            svc.schemaVersion = SCHEMA_VERSION;
+          }
+        } catch {
+          // stays on the earlier columns; Admin › Access › Validate & repair can retry
+        }
       }
       const cfg = mergeConfig(settings.getJson(SETTING_KEYS.config), props.siteTitle);
       const [w, lic] = await Promise.all([loadWorld(cfg), loadLicense()]);

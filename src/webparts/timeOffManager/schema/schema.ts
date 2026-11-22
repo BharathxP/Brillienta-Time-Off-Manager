@@ -1,7 +1,8 @@
 // SharePoint lists the app keeps its data in. The Provisioner creates and repairs them from these definitions;
 // Power Automate and Power BI read the same lists (docs/INTEGRATIONS.md).
 
-export const SCHEMA_VERSION = 1;
+/** 2: Requests.PartialDays, AutoReply, GroupEventId; Employees.LeavingDate. */
+export const SCHEMA_VERSION = 2;
 
 export type FieldType = 'Text' | 'Note' | 'Number' | 'Boolean' | 'DateTime' | 'Choice';
 
@@ -46,6 +47,7 @@ export const LISTS: IListDef[] = [
       { name: 'WorkCalendar', type: 'Text' },
       { name: 'Location', type: 'Text' },
       { name: 'Gender', type: 'Text' },
+      { name: 'LeavingDate', type: 'Text' },
       { name: 'IsActive', type: 'Boolean' }
     ]
   },
@@ -67,6 +69,9 @@ export const LISTS: IListDef[] = [
       { name: 'EndOn', type: 'DateTime' },
       { name: 'Unit', type: 'Choice', choices: ['day', 'half', 'hours'] },
       { name: 'HalfDayPart', type: 'Text' },
+      { name: 'PartialDays', type: 'Text' },
+      { name: 'AutoReply', type: 'Boolean' },
+      { name: 'GroupEventId', type: 'Text' },
       { name: 'StartTime', type: 'Text' },
       { name: 'Hours', type: 'Number' },
       { name: 'Days', type: 'Number' },

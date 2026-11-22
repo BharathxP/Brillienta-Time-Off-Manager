@@ -8,11 +8,12 @@ import { IsoDatePicker } from '../requests/RequestForm';
 import { fmtDate, fmtNum, isIsoDate, leaveYearLabel } from '../../services/dates';
 import { lc } from '../../services/workflow';
 import { GraphService } from '../../services/GraphService';
-import { download, parseCsv, toCsv } from '../../services/exporting';
+import { download, downloadXlsx, parseCsv, toCsv } from '../../services/exporting';
 import { serviceYears } from '../../services/balances';
 import { SETTING_KEYS } from '../../services/SettingsStore';
 
-const CSV_HEADERS = ['Name', 'Email', 'Manager email', 'Department', 'Job title', 'Grade', 'Start date', 'Work calendar', 'Location', 'Gender', 'Active'];
+const CSV_HEADERS = ['Name', 'Email', 'Manager email', 'Department', 'Job title', 'Grade', 'Start date', 'Work calendar', 'Location', 'Gender', 'Leaving date', 'Active'];
+const OPENING_HEADERS = ['Email', 'Leave type', 'Available'];
 
 /** HR: the employee list (who takes leave, their manager, grade, start date, calendar) and everyone's balances. */
 export function EmployeesPage(): JSX.Element {
@@ -24,6 +25,8 @@ export function EmployeesPage(): JSX.Element {
   const [log, setLog] = React.useState<string[]>([]);
   const [ask, dialog] = useConfirm();
   const fileRef = React.useRef<HTMLInputElement>(null);
+  const openingRef = React.useRef<HTMLInputElement>(null);
+  const [bulk, setBulk] = React.useState(false);
   const norm = q.trim().toLowerCase();
   const rows = world.employees
     .filter((e) => !norm || [e.name, e.email, e.department, e.jobTitle, e.grade, e.managerEmail].join(' ').toLowerCase().indexOf(norm) >= 0)
@@ -72,6 +75,10 @@ export function EmployeesPage(): JSX.Element {
           calendar: val('Work calendar', cur && cur.calendar),
           location: val('Location', cur && cur.location),
           gender: val('Gender', cur && cur.gender),
+          leavingDate: (() => {
+            const v = val('Leaving date', cur && cur.leavingDate);
+            return v && isIsoDate(v) ? v : cur && cur.leavingDate;
+          })(),
           active: col('Active') >= 0 && r[col('Active')] ? !/^(no|false|0)$/i.test(r[col('Active')]) : cur ? cur.active : true
         };
         await svc.saveEmployee(e);
@@ -85,7 +92,22 @@ export function EmployeesPage(): JSX.Element {
   };
 
   const exportCsv = (): void => {
-    download('employees.csv', toCsv(CSV_HEADERS, world.employees.map((e) => [e.name, e.email, e.managerEmail, e.department, e.jobTitle, e.grade, e.hireDate, e.calendar, e.location, e.gender, e.active ? 'Yes' : 'No'])));
+    download('employees.csv', toCsv(CSV_HEADERS, world.employees.map((e) => [e.name, e.email, e.managerEmail, e.department, e.jobTitle, e.grade, e.hireDate, e.calendar, e.location, e.gender, e.leavingDate, e.active ? 'Yes' : 'No'])));
+  };
+  const exportXlsx = (): void => {
+    downloadXlsx('employees.xlsx', [{ name: 'Employees', columns: CSV_HEADERS, rows: world.employees.map((e) => [e.name, e.email, e.managerEmail, e.department, e.jobTitle, e.grade, e.hireDate, e.calendar, e.location, e.gender, e.leavingDate, e.active ? 'Yes' : 'No']) }]);
+  };
+
+  const importOpening = async (file: File): Promise<void> => {
+    await run(async () => {
+      const rowsIn = parseCsv(await file.text());
+      const head = (rowsIn.shift() || []).map((h) => h.toLowerCase());
+      const ci = (n: string): number => head.indexOf(n.toLowerCase());
+      if (ci('email') < 0 || ci('leave type') < 0 || ci('available') < 0) throw new Error('The file needs the columns Email, Leave type and Available.');
+      const res = await engine.importOpeningBalances(world, rowsIn.map((r) => ({ email: r[ci('email')], leaveType: r[ci('leave type')], available: Number((r[ci('available')] || '').replace(',', '.')) })), year, { email: me.email, name: me.title });
+      setLog([`Opening balances: ${res.done} set for ${leaveYearLabel(year, config.yearStartMonth)}.`].concat(res.skipped.length ? [`Skipped (unknown person or leave type): ${res.skipped.slice(0, 20).join(', ')}`] : []));
+      await reload();
+    }, 'Opening balances imported.');
   };
 
   const carry = async (): Promise<void> => {
@@ -120,18 +142,30 @@ export function EmployeesPage(): JSX.Element {
                   { key: 'exp', text: 'Export CSV', iconProps: { iconName: 'Download' }, onClick: () => {
                       exportCsv();
                     } },
+                  { key: 'xlsx', text: 'Export Excel', iconProps: { iconName: 'ExcelDocument' }, onClick: () => {
+                      exportXlsx();
+                    } },
+                  { key: 'div', text: '-', itemType: 1 },
+                  { key: 'open', text: 'Import opening balances…', iconProps: { iconName: 'Upload' }, onClick: () => {
+                      if (openingRef.current) openingRef.current.click();
+                    } },
+                  { key: 'opentpl', text: 'Opening balances template', iconProps: { iconName: 'Page' }, onClick: () => {
+                      download('opening-balances-template.csv', toCsv(OPENING_HEADERS, world.employees.filter((e) => e.active).slice(0, 3).map((e) => [e.email, 'Annual leave', 12])));
+                    } },
                   { key: 'tpl', text: 'Download template', iconProps: { iconName: 'Page' }, onClick: () => {
                       download('employees-template.csv', toCsv(CSV_HEADERS, [['Asha Rao', 'asha@contoso.com', 'manager@contoso.com', 'Sales', 'Account manager', 'L2', '2024-04-01', 'default', 'Bengaluru', 'Female', 'Yes']]));
                     } }
                 ]
               }}
             />
+            <DefaultButton iconProps={{ iconName: 'AddTo' }} text="Bulk adjust" disabled={busy} onClick={() => setBulk(true)} />
             <DefaultButton iconProps={{ iconName: 'Forward' }} text="Carry forward" disabled={busy} onClick={() => void carry()} />
             <PrimaryButton iconProps={{ iconName: 'AddFriend' }} text="Add employee" onClick={() => setEdit({ email: '', name: '', active: true })} />
           </>
         }
       />
       <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={(e) => e.target.files && e.target.files[0] && void importCsv(e.target.files[0])} />
+      <input ref={openingRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={(e) => e.target.files && e.target.files[0] && void importOpening(e.target.files[0])} />
       {log.length > 0 && (
         <MessageBar messageBarType={MessageBarType.info} isMultiline onDismiss={() => setLog([])} styles={{ root: { marginBottom: 12 } }}>
           {log.map((l, i) => (
@@ -170,6 +204,7 @@ export function EmployeesPage(): JSX.Element {
                       <PersonLine email={e.email} name={e.name} sub={e.jobTitle || e.email} size="sm" />
                       {!e.active && <span className="to-badge is-muted">Inactive</span>}
                       {e.active && !licensed.has(lc(e.email)) && <span className="to-badge is-warn">Over licence</span>}
+                      {e.leavingDate && <span className="to-badge is-muted">Leaving {fmtDate(e.leavingDate)}</span>}
                     </td>
                     <td>{mgr ? mgr.name : e.managerEmail || <span className="to-muted">—</span>}</td>
                     <td>{e.department || '—'}</td>
@@ -192,6 +227,7 @@ export function EmployeesPage(): JSX.Element {
       </Card>
       {edit && <EmployeeEditor employee={edit} onClose={() => setEdit(undefined)} />}
       {balances && <BalancePanel employee={balances} onClose={() => setBalances(undefined)} />}
+      {bulk && <BulkAdjust onClose={() => setBulk(false)} />}
     </>
   );
 }
@@ -227,8 +263,10 @@ function EmployeeEditor(props: { employee: IEmployee; onClose: () => void }): JS
           <IsoDatePicker label="Start date (tenure, proration)" value={e.hireDate || ''} onChange={(d) => set({ hireDate: d })} />
           <Dropdown label="Work calendar" selectedKey={e.calendar || config.defaultCalendar} options={config.calendars.map((c) => ({ key: c.key, text: c.name }))} onChange={(_, o) => o && set({ calendar: String(o.key) })} />
           <TextField label="Location" value={e.location || ''} onChange={(_, v) => set({ location: v || '' })} />
+          <IsoDatePicker label="Leaving date (last working day)" value={e.leavingDate || ''} onChange={(d) => set({ leavingDate: d })} />
           <Dropdown label="Gender (for gender-specific leave)" selectedKey={e.gender || ''} options={[{ key: '', text: 'Not set' }, { key: 'Female', text: 'Female' }, { key: 'Male', text: 'Male' }, { key: 'Other', text: 'Other' }]} onChange={(_, o) => o && set({ gender: String(o.key) })} />
         </div>
+        {e.leavingDate && <DefaultButton text="Clear leaving date" onClick={() => set({ leavingDate: '' })} styles={{ root: { alignSelf: 'flex-start' } }} />}
         <Toggle label="Active" checked={e.active} onChange={(_, c) => set({ active: !!c })} />
       </div>
     </Panel>
@@ -236,7 +274,7 @@ function EmployeeEditor(props: { employee: IEmployee; onClose: () => void }): JS
 }
 
 /** One person's balances with the calculation, ledger entries, adjustments and comp-off grants. */
-export function BalancePanel(props: { employee: IEmployee; onClose: () => void }): JSX.Element {
+export function BalancePanel(props: { employee: IEmployee; onClose: () => void; readOnly?: boolean }): JSX.Element {
   const { config, world, engine, reload, me, year, openRequest, svc } = useApp();
   const e = props.employee;
   const [viewYear, setViewYear] = React.useState(year);
@@ -270,6 +308,21 @@ export function BalancePanel(props: { employee: IEmployee; onClose: () => void }
       </div>
       <BalanceCards employee={e} year={viewYear} compact showAll onRequest={setType} />
       <div className="to-grid to-grid-2" style={{ marginTop: 16 }}>
+        {props.readOnly ? (
+          <Card title="This year" icon="Calendar">
+            <div className="to-stack">
+              {world.requests
+                .filter((r) => lc(r.employeeEmail) === lc(e.email) && r.leaveYear === viewYear && r.kind === 'leave' && r.status !== 'Cancelled')
+                .sort((a, b2) => (a.start < b2.start ? 1 : -1))
+                .slice(0, 15)
+                .map((r) => (
+                  <div key={r.id} className="to-small">
+                    {fmtDate(r.start)}{r.end !== r.start ? ` – ${fmtDate(r.end)}` : ''} · {(config.leaveTypes.filter((x) => x.key === r.leaveType)[0] || { name: r.leaveType }).name} · {fmtNum(r.days)} d · <span className="to-muted">{r.status}</span>
+                  </div>
+                ))}
+            </div>
+          </Card>
+        ) : (
         <Card title="Adjust a balance" icon="Edit">
           <div className="to-stack">
             <Dropdown label="Leave type" selectedKey={type} options={config.leaveTypes.filter((x) => x.active && x.entitlement.mode !== 'unlimited').map((x) => ({ key: x.key, text: x.name }))} onChange={(_, o) => o && setType(String(o.key))} />
@@ -288,6 +341,7 @@ export function BalancePanel(props: { employee: IEmployee; onClose: () => void }
             <PrimaryButton text="Save adjustment" disabled={busy || !days} onClick={() => void adjust()} />
           </div>
         </Card>
+        )}
         <Card title="Ledger" icon="List">
           {entries.length ? (
             <table className="to-table">
@@ -311,7 +365,7 @@ export function BalancePanel(props: { employee: IEmployee; onClose: () => void }
                     <td>{l.kind}</td>
                     <td className="to-number">{l.days > 0 ? '+' : ''}{fmtNum(l.days)}</td>
                     <td>
-                      {l.id && l.kind !== 'compoff' && (
+                      {l.id && l.kind !== 'compoff' && !props.readOnly && (
                         <DefaultButton
                           text="Undo"
                           disabled={busy}
@@ -333,6 +387,40 @@ export function BalancePanel(props: { employee: IEmployee; onClose: () => void }
             <div className="to-muted to-small">No adjustments, carry-forward or comp-off credits.</div>
           )}
         </Card>
+      </div>
+    </Panel>
+  );
+}
+
+/** The same adjustment for everyone in a department / grade (e.g. an extra company day off). */
+function BulkAdjust(props: { onClose: () => void }): JSX.Element {
+  const { world, config, engine, reload, me, year } = useApp();
+  const [dept, setDept] = React.useState('');
+  const [grade, setGrade] = React.useState('');
+  const [type, setType] = React.useState(config.leaveTypes.filter((t) => t.active && t.entitlement.mode !== 'unlimited')[0].key);
+  const [days, setDays] = React.useState(1);
+  const [note, setNote] = React.useState('');
+  const [busy, run] = useBusy();
+  const departments = world.employees.map((e) => e.department || '').filter((d, i, all) => d && all.indexOf(d) === i).sort();
+  const people = world.employees.filter((e) => e.active && (!dept || e.department === dept) && (!grade || e.grade === grade));
+  return (
+    <Panel isOpen type={PanelType.medium} onDismiss={props.onClose} headerText="Bulk adjust balances" isFooterAtBottom onRenderFooterContent={() => (
+      <div className="to-row">
+        <PrimaryButton text={`Apply to ${people.length} people`} disabled={busy || !days || !note.trim() || !people.length} onClick={() => void run(async () => {
+          await engine.bulkAdjust(world, people, type, year, days, note, { email: me.email, name: me.title });
+          await reload();
+          props.onClose();
+        }, `Balances of ${people.length} people updated.`)} />
+        <DefaultButton text="Cancel" onClick={props.onClose} />
+      </div>
+    )}>
+      <div className="to-stack">
+        <Dropdown label="Department" selectedKey={dept} options={[{ key: '', text: 'Everyone' }].concat(departments.map((d) => ({ key: d, text: d })))} onChange={(_, o) => o && setDept(String(o.key))} />
+        <Dropdown label="Grade" selectedKey={grade} options={[{ key: '', text: 'Every grade' }].concat(config.grades.map((g) => ({ key: g, text: g })))} onChange={(_, o) => o && setGrade(String(o.key))} />
+        <Dropdown label="Leave type" selectedKey={type} options={config.leaveTypes.filter((t) => t.active && t.entitlement.mode !== 'unlimited').map((t) => ({ key: t.key, text: t.name }))} onChange={(_, o) => o && setType(String(o.key))} />
+        <SpinButton label={`Days for leave year ${leaveYearLabel(year, config.yearStartMonth)} (use − to deduct)`} value={String(days)} step={0.5} min={-365} max={365} onChange={(_, v) => setDays(Number(v) || 0)} />
+        <TextField label="Note" value={note} onChange={(_, v) => setNote(v || '')} placeholder="e.g. Company anniversary day" />
+        <div className="to-small to-muted">{people.length} active people match. Each gets a ledger entry, so it can be undone person by person.</div>
       </div>
     </Panel>
   );

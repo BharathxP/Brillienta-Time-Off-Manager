@@ -42,6 +42,7 @@ export function itemToEmployee(i: SPItem): IEmployee {
     calendar: str(i.WorkCalendar) || undefined,
     location: str(i.Location) || undefined,
     gender: str(i.Gender) || undefined,
+    leavingDate: str(i.LeavingDate) || undefined,
     active: i.IsActive !== false
   };
 }
@@ -59,6 +60,7 @@ export function employeeToItem(e: IEmployee): SPItem {
     WorkCalendar: e.calendar || '',
     Location: e.location || '',
     Gender: e.gender || '',
+    LeavingDate: e.leavingDate || '',
     IsActive: e.active
   };
 }
@@ -75,6 +77,9 @@ export function itemToRequest(i: SPItem): ILeaveRequest {
     end: str(i.EndDate) || str(i.StartDate),
     unit: (str(i.Unit) as ILeaveRequest['unit']) || 'day',
     halfDayPart: (str(i.HalfDayPart) as 'am' | 'pm') || undefined,
+    partial: (str(i.PartialDays) as ILeaveRequest['partial']) || undefined,
+    autoReply: !!i.AutoReply,
+    groupEventId: str(i.GroupEventId) || undefined,
     startTime: str(i.StartTime) || undefined,
     hours: num(i.Hours),
     days: num(i.Days),
@@ -110,6 +115,9 @@ export function requestToItem(r: Omit<ILeaveRequest, 'id' | 'created'>, typeName
     EndOn: dateOnly(r.end),
     Unit: r.unit,
     HalfDayPart: r.halfDayPart || '',
+    PartialDays: r.partial || '',
+    AutoReply: !!r.autoReply,
+    GroupEventId: r.groupEventId || '',
     StartTime: r.startTime || '',
     Hours: r.hours,
     Days: r.days,
@@ -162,9 +170,14 @@ export function itemToDelegation(i: SPItem): IDelegation {
  * Reads and writes the app's SharePoint lists. Business rules live in the pure modules (balances, workflow,
  * requests); this class only moves rows.
  */
+/** Columns added by schema version 2: left out of writes until the site's lists have them. */
+const V2_FIELDS = ['PartialDays', 'AutoReply', 'GroupEventId', 'LeavingDate'];
+
 export class LeaveService {
   public readonly sp: SPClient;
   public readonly prefix: string;
+  /** Schema version of the site's lists (set when the app loads). */
+  public schemaVersion: number = 2;
 
   public constructor(sp: SPClient, prefix: string) {
     this.sp = sp;
@@ -179,20 +192,27 @@ export class LeaveService {
     return `${this.sp.list(this.title(key))}/items`;
   }
 
+  private _fit(body: SPItem): SPItem {
+    if (this.schemaVersion >= 2) return body;
+    const out: SPItem = { ...body };
+    V2_FIELDS.forEach((f) => delete out[f]);
+    return out;
+  }
+
   private async _add(key: ListKey, body: SPItem): Promise<SPItem> {
-    return this.sp.post<SPItem>(this._items(key), body);
+    return this.sp.post<SPItem>(this._items(key), this._fit(body));
   }
 
   // ---------------------------------------------------------------- employees
 
   public async loadEmployees(): Promise<IEmployee[]> {
-    const rows = await this.sp.getAll<SPItem>(`${this._items('employees')}?$top=5000&$select=Id,Title,Email,AadId,JobTitle,Department,ManagerEmail,Grade,HireDate,WorkCalendar,Location,Gender,IsActive`);
+    const rows = await this.sp.getAll<SPItem>(`${this._items('employees')}?$top=5000&$select=Id,Title,Email,AadId,JobTitle,Department,ManagerEmail,Grade,HireDate,WorkCalendar,Location,Gender,IsActive${this.schemaVersion >= 2 ? ',LeavingDate' : ''}`);
     return rows.map(itemToEmployee).filter((e) => !!e.email);
   }
 
   public async saveEmployee(e: IEmployee): Promise<IEmployee> {
     if (e.id) {
-      await this.sp.merge(`${this._items('employees')}(${e.id})`, employeeToItem(e));
+      await this.sp.merge(`${this._items('employees')}(${e.id})`, this._fit(employeeToItem(e)));
       return e;
     }
     const row = await this._add('employees', employeeToItem(e));
@@ -220,11 +240,20 @@ export class LeaveService {
   }
 
   public async updateRequest(r: ILeaveRequest, typeName: string, department: string): Promise<void> {
-    await this.sp.merge(`${this._items('requests')}(${r.id})`, requestToItem(r, typeName, department));
+    await this.sp.merge(`${this._items('requests')}(${r.id})`, this._fit(requestToItem(r, typeName, department)));
   }
 
   public async setCalendarEvent(id: number, eventId: string): Promise<void> {
     await this.sp.merge(`${this._items('requests')}(${id})`, { CalendarEventId: eventId });
+  }
+
+  public async setGroupEvent(id: number, eventId: string): Promise<void> {
+    if (this.schemaVersion < 2) return;
+    await this.sp.merge(`${this._items('requests')}(${id})`, { GroupEventId: eventId });
+  }
+
+  public async deleteRequest(id: number): Promise<void> {
+    await this.sp.del(`${this._items('requests')}(${id})`);
   }
 
   public async addAttachment(id: number, file: File): Promise<void> {

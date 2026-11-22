@@ -7,7 +7,7 @@ import { Notifier } from './Notifier';
 import { GraphService } from './GraphService';
 import { IDraft, duration, describeRecurrence, newSeriesId, occurrences } from './requests';
 import { IActor, IDirectory, buildSteps, decide, delegateFor, indexEmployees, lc, refreshDelegates, reminderAction, startWorkflow } from './workflow';
-import { addDays, daysBetween, leaveYearOf, today } from './dates';
+import { addDays, daysBetween, fmtDate, leaveYearOf, today } from './dates';
 import { allBalances, carryForwardDays, computeBalance } from './balances';
 
 export interface IWorld {
@@ -88,6 +88,8 @@ export class Engine {
         end,
         unit: draft.unit,
         halfDayPart: draft.unit === 'half' ? draft.halfDayPart || 'am' : undefined,
+        partial: draft.unit === 'day' && draft.partial ? draft.partial : undefined,
+        autoReply: draft.kind === 'leave' && !!draft.autoReply,
         startTime: draft.unit === 'hours' ? draft.startTime : undefined,
         hours: dur.hours,
         days: dur.days,
@@ -138,8 +140,34 @@ export class Engine {
       await this.notifier.send('compoffCredited', r, [{ email: r.employeeEmail, name: r.employeeName }], name, expiry ? `Use it by ${expiry}` : undefined);
     } else {
       await this.notifier.send('approved', r, [{ email: r.employeeEmail, name: r.employeeName }].concat(this._hrRecipients(w)), name);
+      await this._publishToGroup(w, r);
     }
     await this.notifier.publish('approved', r, name, actor);
+  }
+
+  /** Approved leave on the Microsoft 365 group (Teams channel) calendar, posted by whoever approves it. */
+  private async _publishToGroup(w: IWorld, r: ILeaveRequest): Promise<void> {
+    const g = w.config.groupCalendar;
+    if (!this.graph || !g || !g.enabled || !g.groupId || r.groupEventId) return;
+    try {
+      const e = this._dir(w).byEmail[lc(r.employeeEmail)];
+      const ev = GraphService.eventFor(w.config, r, e, this.typeName(w, r.leaveType));
+      const id = await this.graph.addGroupEvent(g.groupId, { ...ev, subject: `${r.employeeName} – ${ev.subject}` });
+      await this.svc.setGroupEvent(r.id, id);
+    } catch {
+      // Group.ReadWrite.All not approved, or the approver is not a member: the app's team calendar still shows it.
+    }
+  }
+
+  private async _unpublishFromGroup(w: IWorld, r: ILeaveRequest): Promise<void> {
+    const g = w.config.groupCalendar;
+    if (!this.graph || !g || !g.groupId || !r.groupEventId || r.groupEventId === 'removed') return;
+    try {
+      await this.graph.removeGroupEvent(g.groupId, r.groupEventId);
+      await this.svc.setGroupEvent(r.id, 'removed');
+    } catch {
+      // the event may already be gone
+    }
   }
 
   public async decide(w: IWorld, r: ILeaveRequest, decision: 'approve' | 'reject', comment: string, actor: IActor, onBehalf: boolean): Promise<ILeaveRequest> {
@@ -153,7 +181,10 @@ export class Engine {
     const employee = [{ email: next.employeeEmail, name: next.employeeName }];
     if (wasCancelRequest) {
       await this.notifier.send(next.status === 'Cancelled' ? 'cancelled' : 'approved', next, employee, name, next.status === 'Cancelled' ? 'Your cancellation was approved' : 'Your cancellation was declined; the leave stands');
-      if (next.status === 'Cancelled') await this.notifier.publish('cancelled', next, name, actor);
+      if (next.status === 'Cancelled') {
+        await this.notifier.publish('cancelled', next, name, actor);
+        await this._unpublishFromGroup(w, next);
+      }
     } else if (res.status === 'Approved') await this._finalised(w, next, actor);
     else if (res.status === 'Rejected') {
       await this.notifier.send('rejected', next, employee, name, comment);
@@ -192,12 +223,125 @@ export class Engine {
       if (lc(actor.email) !== lc(r.employeeEmail)) told.push({ email: r.employeeEmail, name: r.employeeName });
       await this.notifier.send('cancelled', next, told, name, reason);
       await this.notifier.publish('cancelled', next, name, actor);
+      await this._unpublishFromGroup(w, next);
     }
     if (r.kind === 'compoff' && r.status === 'Approved' && status === 'Cancelled') {
       const credit = w.ledger.filter((l) => l.uniqueKey === `compoff:${r.id}`)[0];
       if (credit && credit.id) await this.svc.deleteLedger(credit.id);
     }
     return next;
+  }
+
+  /**
+   * Change a pending request (dates, type, length, reason). The approval starts again from the first level, so
+   * nobody approves something they have not seen.
+   */
+  public async edit(w: IWorld, r: ILeaveRequest, draft: IDraft, actor: IActor, files: File[]): Promise<ILeaveRequest> {
+    const fresh = await this.svc.getRequest(r.id);
+    if (fresh.status !== 'Pending') throw new Error('Only pending requests can be changed. Cancel and submit a new request instead.');
+    const dir = this._dir(w);
+    const e = dir.byEmail[lc(fresh.employeeEmail)];
+    const type = this._type(w, draft.kind === 'compoff' ? w.config.compOff.leaveType : draft.leaveType);
+    if (!type) throw new Error('Unknown leave type.');
+    const end = draft.unit === 'day' ? draft.end : draft.start;
+    const dur = duration(w.config, type, e, { ...draft, end });
+    const now = new Date().toISOString();
+    const steps = buildSteps(w.config, dir, w.delegations, type, e, dur.days, today());
+    const wf = draft.kind === 'compoff' ? { ...type, autoApprove: { enabled: false, maxDays: 0 } } : type;
+    const started = startWorkflow(wf, steps, dur.days, now, actor.name);
+    const changes: string[] = [];
+    if (fresh.leaveType !== type.key) changes.push(`type ${this.typeName(w, fresh.leaveType)} → ${type.name}`);
+    if (fresh.start !== draft.start || fresh.end !== end) changes.push(`dates ${fresh.start}${fresh.end !== fresh.start ? '–' + fresh.end : ''} → ${draft.start}${end !== draft.start ? '–' + end : ''}`);
+    if (fresh.days !== dur.days) changes.push(`${fresh.days} → ${dur.days} days`);
+    const next: ILeaveRequest = {
+      ...fresh,
+      leaveType: type.key,
+      start: draft.start,
+      end,
+      unit: draft.unit,
+      halfDayPart: draft.unit === 'half' ? draft.halfDayPart || 'am' : undefined,
+      partial: draft.unit === 'day' && draft.partial ? draft.partial : undefined,
+      startTime: draft.unit === 'hours' ? draft.startTime : undefined,
+      autoReply: !!draft.autoReply,
+      hours: dur.hours,
+      days: dur.days,
+      leaveYear: leaveYearOf(draft.start, w.config.yearStartMonth),
+      reason: draft.reason,
+      status: started.status,
+      steps: started.steps,
+      currentStep: started.currentStep,
+      history: fresh.history.concat({ at: now, by: actor.name, action: 'Changed — approval restarted', note: changes.join('; ') || undefined }).concat(started.history.slice(1))
+    };
+    await this._save(w, next);
+    for (const f of files) await this.svc.addAttachment(next.id, f);
+    if (next.status === 'Approved') await this._finalised(w, next, actor);
+    else await this.notifier.send('submitted', next, next.steps[next.currentStep].approvers, type.name, 'The request was changed');
+    await this.notifier.publish('changed', next, type.name, actor);
+    return next;
+  }
+
+  /** The same adjustment for many people (e.g. a company-wide extra day). */
+  public async bulkAdjust(w: IWorld, people: IEmployee[], leaveType: string, year: number, days: number, note: string, actor: IPerson): Promise<number> {
+    const type = this._type(w, leaveType);
+    const kind: ILedgerEntry['kind'] = type && type.entitlement.mode === 'earned' ? 'compoff' : 'grant';
+    const expires = kind === 'compoff' && type && type.entitlement.expiryDays > 0 ? addDays(today(), type.entitlement.expiryDays) : undefined;
+    const added: ILedgerEntry[] = [];
+    for (const e of people) {
+      added.push(await this.svc.addLedger({ employeeEmail: e.email, leaveType, leaveYear: year, days, kind, note, effective: today(), expiresOn: expires, by: actor.email }));
+    }
+    w.ledger = w.ledger.concat(added);
+    await this.svc.audit('Bulk adjustment', actor, `${people.length} people`, `${this.typeName(w, leaveType)} ${year}: ${days > 0 ? '+' : ''}${days} (${note})`);
+    return people.length;
+  }
+
+  /**
+   * Opening balances (moving from another system): for each row, the adjustment that makes the available balance
+   * equal the given number on the import day. Re-importing replaces the earlier opening entry (unique key).
+   */
+  public async importOpeningBalances(w: IWorld, rows: Array<{ email: string; leaveType: string; available: number }>, year: number, actor: IPerson): Promise<{ done: number; skipped: string[] }> {
+    const dir = this._dir(w);
+    const skipped: string[] = [];
+    let done = 0;
+    for (const row of rows) {
+      const e = dir.byEmail[lc(row.email)];
+      const type = w.config.leaveTypes.filter((t) => t.key === row.leaveType || lc(t.name) === lc(row.leaveType) || lc(t.code) === lc(row.leaveType))[0];
+      if (!e || !type || isNaN(row.available)) {
+        skipped.push(`${row.email} / ${row.leaveType}`);
+        continue;
+      }
+      const key = `opening:${year}:${lc(e.email)}:${type.key}`;
+      const old = w.ledger.filter((l) => l.uniqueKey === key)[0];
+      if (old && old.id) {
+        await this.svc.deleteLedger(old.id);
+        w.ledger = w.ledger.filter((l) => l !== old);
+      }
+      const current = computeBalance(w.config, type, e, year, w.ledger, w.requests, today());
+      const delta = Math.round((row.available - current.available) * 100) / 100;
+      if (delta !== 0) {
+        const entry = await this.svc.addLedger({ employeeEmail: e.email, leaveType: type.key, leaveYear: year, days: delta, kind: type.entitlement.mode === 'earned' ? 'compoff' : 'adjustment', note: `Opening balance ${row.available}`, effective: today(), uniqueKey: key, by: actor.email });
+        w.ledger = w.ledger.concat(entry);
+      }
+      done++;
+    }
+    await this.svc.audit('Opening balances imported', actor, String(year), `${done} balance(s), ${skipped.length} skipped`);
+    return { done, skipped };
+  }
+
+  /** Remove the sample organisation added by the setup wizard (people at @example.com, their requests and ledger). */
+  public async removeSampleData(w: IWorld, actor: IPerson): Promise<number> {
+    const sample = (email: string): boolean => /@example\.com$/i.test(email);
+    let n = 0;
+    for (const r of w.requests.filter((x) => sample(x.employeeEmail))) {
+      await this.svc.deleteRequest(r.id);
+      n++;
+    }
+    for (const l of w.ledger.filter((x) => sample(x.employeeEmail) && x.id)) await this.svc.deleteLedger(l.id as number);
+    for (const e of w.employees.filter((x) => sample(x.email) && x.id)) {
+      await this.svc.deleteEmployee(e.id as number);
+      n++;
+    }
+    await this.svc.audit('Sample data removed', actor, 'example.com', `${n} rows`);
+    return n;
   }
 
   // ---------------------------------------------------------------- balances
@@ -319,7 +463,23 @@ export class Engine {
         }
       } catch {
         // Calendars.ReadWrite not approved yet: the team calendar and .ics export still work.
-        return n;
+        break;
+      }
+    }
+    // Outlook automatic reply: Outlook holds one schedule, so the next approved leave that asked for one.
+    const ar = w.config.autoReply;
+    const next = mine.filter((r) => r.status === 'Approved' && r.autoReply && r.unit === 'day').sort((a, b) => (a.start < b.start ? -1 : 1))[0];
+    if (ar && ar.enabled && next && !next.history.some((h) => h.action === 'Automatic reply scheduled')) {
+      try {
+        const mgr = this._dir(w).byEmail[lc(me.managerEmail)];
+        const msg = ar.message.replace(/\{start\}/g, fmtDate(next.start)).replace(/\{end\}/g, fmtDate(next.end)).replace(/\{manager\}/g, mgr ? `${mgr.name} (${mgr.email})` : 'my manager').replace(/\{name\}/g, me.name);
+        await this.graph.scheduleAutoReply(next.start, next.end, msg);
+        const updated = { ...next, history: next.history.concat({ at: new Date().toISOString(), by: me.name, action: 'Automatic reply scheduled' }) };
+        await this._save(w, updated);
+        Object.assign(next, updated);
+        n++;
+      } catch {
+        // MailboxSettings.ReadWrite not approved yet
       }
     }
     return n;

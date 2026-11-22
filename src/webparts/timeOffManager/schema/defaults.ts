@@ -123,7 +123,14 @@ export function defaultConfig(orgName: string = ''): IConfig {
     integrations: { webhookUrl: '', outbox: true },
     calendarSync: { outlook: true, showAs: 'oof' },
     teamCalendar: { scope: 'team', showLeaveType: true },
-    compOff: { enabled: true, leaveType: 'compoff', requireNonWorkingDay: true, maxDaysPerClaim: 2 }
+    compOff: { enabled: true, leaveType: 'compoff', requireNonWorkingDay: true, maxDaysPerClaim: 2 },
+    blackouts: [],
+    staffing: { enabled: false, maxAwayPercent: 50, maxAwayCount: 0, mode: 'warn', perDepartment: {} },
+    groupCalendar: { enabled: false, groupId: '', groupName: '' },
+    autoReply: {
+      enabled: true,
+      message: 'Hi, I am on leave from {start} to {end} and will reply when I am back. For anything urgent, please contact {manager}.'
+    }
   };
 }
 
@@ -139,7 +146,7 @@ export function mergeConfig(saved: unknown, orgName: string = ''): IConfig {
     Object.keys(from).forEach((k) => {
       const v = from[k];
       if (v === undefined || v === null) return;
-      out[k] = isObj(v) && isObj(into[k]) && k !== 'departmentHeads' ? deep(into[k] as Record<string, unknown>, v) : v;
+      out[k] = isObj(v) && isObj(into[k]) && k !== 'departmentHeads' && k !== 'perDepartment' ? deep(into[k] as Record<string, unknown>, v) : v;
     });
     return out;
   };

@@ -31,6 +31,9 @@ if (!params.get('fresh')) {
   const cfg = defaultConfig('Acme');
   const me = { email: 'priya.nair@example.com', name: 'Priya Nair' };
   if (role === 'hr' || role === 'admin') cfg.hr = [me];
+  const iso = (d) => d.toISOString().substring(0, 10);
+  cfg.blackouts = [{ key: 'ye', name: 'Year-end close', from: iso(new Date(Date.now() + 35 * 864e5)), to: iso(new Date(Date.now() + 40 * 864e5)), departments: ['Engineering'], leaveTypes: [], mode: 'block' }];
+  cfg.staffing = { enabled: true, maxAwayPercent: 50, maxAwayCount: 0, mode: 'warn', perDepartment: {} };
   const emps = sampleEmployees(me);
   seed('TO_Settings', [
     { Title: 'SchemaVersion', SettingValue: String(SCHEMA_VERSION) },

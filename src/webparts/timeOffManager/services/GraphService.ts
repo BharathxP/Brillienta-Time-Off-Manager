@@ -102,4 +102,46 @@ export class GraphService {
     const c = await this.client();
     await c.api(`/me/events/${encodeURIComponent(eventId)}`).delete();
   }
+
+  /**
+   * Schedule the signed-in person's Outlook automatic reply for the leave (MailboxSettings.ReadWrite). Internal and
+   * external replies use the same message.
+   */
+  public async scheduleAutoReply(start: string, endInclusive: string, message: string): Promise<void> {
+    const c = await this.client();
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const html = message.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\n/g, '<br>');
+    await c.api('/me/mailboxSettings').patch({
+      automaticRepliesSetting: {
+        status: 'scheduled',
+        scheduledStartDateTime: { dateTime: `${start}T00:00:00`, timeZone: tz },
+        scheduledEndDateTime: { dateTime: `${addDays(endInclusive, 1)}T00:00:00`, timeZone: tz },
+        internalReplyMessage: html,
+        externalReplyMessage: html,
+        externalAudience: 'all'
+      }
+    });
+  }
+
+  /** Microsoft 365 groups (Teams) whose name starts with the text (Group.Read.All). */
+  public async findGroups(text: string): Promise<Array<{ id: string; name: string; mail: string }>> {
+    const c = await this.client();
+    const q = text.replace(/'/g, "''");
+    const res: { value: Array<{ id: string; displayName: string; mail: string }> } = await c
+      .api(`/groups?$filter=groupTypes/any(g:g eq 'Unified') and startswith(displayName,'${q}')&$select=id,displayName,mail&$top=20`)
+      .get();
+    return res.value.map((g) => ({ id: g.id, name: g.displayName, mail: g.mail }));
+  }
+
+  /** Add an event to a Microsoft 365 group calendar, i.e. the Teams channel calendar (Group.ReadWrite.All). */
+  public async addGroupEvent(groupId: string, event: Record<string, unknown>): Promise<string> {
+    const c = await this.client();
+    const res: { id: string } = await c.api(`/groups/${encodeURIComponent(groupId)}/events`).post({ ...event, showAs: 'free', isReminderOn: false });
+    return res.id;
+  }
+
+  public async removeGroupEvent(groupId: string, eventId: string): Promise<void> {
+    const c = await this.client();
+    await c.api(`/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}`).delete();
+  }
 }

@@ -3,8 +3,10 @@ import { DefaultButton, Dropdown, Icon, TextField } from '@fluentui/react';
 import { useApp } from '../AppContext';
 import { Card, Kpi, PageHeader } from '../common/Ui';
 import { BarList, Columns } from '../common/Charts';
-import { addMonths, fmtNum, leaveYearLabel, leaveYearStart, today } from '../../services/dates';
-import { download, toCsv } from '../../services/exporting';
+import { addDays as plusDays, addMonths, fmtDate, fmtNum, leaveYearLabel, leaveYearStart, today } from '../../services/dates';
+import { download, downloadXlsx, toCsv } from '../../services/exporting';
+import { bradfordFactor } from '../../services/balances';
+import { IsoDatePicker } from '../requests/RequestForm';
 import { lc } from '../../services/workflow';
 import { listTitle } from '../../schema/schema';
 
@@ -47,11 +49,47 @@ export function Reports(): JSX.Element {
   const mainTypes = config.leaveTypes.filter((ty) => ty.active && ty.entitlement.mode !== 'unlimited').slice(0, 6);
   const balanceRows = people.map((e) => ({ e, b: engine.balancesFor(world, e, viewYear) }));
 
-  const exportRequests = (): void => {
-    const rows = reqs.map((r) => [r.id, r.employeeName, r.employeeEmail, (world.employees.filter((e) => lc(e.email) === lc(r.employeeEmail))[0] || { department: '' }).department, r.kind, (config.leaveTypes.filter((x) => x.key === r.leaveType)[0] || { name: r.leaveType }).name, r.start, r.end, r.unit, r.hours, r.days, r.status, r.submittedBy ? r.submittedBy.email : '', r.created.substring(0, 10)]);
-    download(`leave-requests-${viewYear}.csv`, toCsv(['Id', 'Employee', 'Email', 'Department', 'Kind', 'Leave type', 'Start', 'End', 'Unit', 'Hours', 'Days', 'Status', 'Submitted by', 'Created'], rows));
+  // Leave register: approved leave overlapping any date range (payroll periods, audits).
+  const [from, setFrom] = React.useState(t.substring(0, 8) + '01');
+  const [to, setTo] = React.useState(plusDays(addMonths(t.substring(0, 8) + '01', 1), -1));
+  const register = world.requests
+    .filter((r) => r.kind === 'leave' && r.status === 'Approved' && r.start <= to && r.end >= from && emails.indexOf(lc(r.employeeEmail)) >= 0)
+    .sort((a, b) => (a.start < b.start ? -1 : 1));
+  const typeName = (k: string): string => (config.leaveTypes.filter((x) => x.key === k)[0] || { name: k }).name;
+  const paidOf = (k: string): boolean => (config.leaveTypes.filter((x) => x.key === k)[0] || { paid: true }).paid;
+  const exportRegister = (): void => {
+    downloadXlsx(`leave-register-${from}-to-${to}.xlsx`, [
+      {
+        name: 'Leave register',
+        columns: ['Employee', 'Email', 'Department', 'Leave type', 'Paid', 'Start', 'End', 'Unit', 'Hours', 'Days'],
+        rows: register.map((r) => [r.employeeName, r.employeeEmail, (world.employees.filter((e) => lc(e.email) === lc(r.employeeEmail))[0] || { department: '' }).department || '', typeName(r.leaveType), paidOf(r.leaveType) ? 'Yes' : 'No', r.start, r.end, r.unit, r.hours, r.days])
+      }
+    ]);
   };
-  const exportBalances = (): void => {
+
+  // Bradford factor over the last 52 weeks (sick leave).
+  const sickTypes = config.leaveTypes.filter((x) => /sick|medical/i.test(x.key + x.name)).map((x) => x.key);
+  const yearAgo = plusDays(t, -364);
+  const bradford = people
+    .map((e) => ({ e, ...bradfordFactor(world.requests.filter((r) => lc(r.employeeEmail) === lc(e.email) && r.kind === 'leave' && r.status === 'Approved' && sickTypes.indexOf(r.leaveType) >= 0 && r.end >= yearAgo && r.start <= t)) }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  // Leave liability: unused paid days of balance-based types (what would be owed or carried).
+  const liabilityTypes = config.leaveTypes.filter((x) => x.active && x.paid && (x.entitlement.mode === 'fixed' || x.entitlement.mode === 'accrual' || x.entitlement.mode === 'earned'));
+  const liability = liabilityTypes
+    .map((ty) => ({ label: ty.name, value: Math.round(people.reduce((sum, e) => sum + Math.max(0, (engine.balancesFor(world, e, viewYear).filter((b) => b.leaveType === ty.key)[0] || { available: 0 }).available), 0) * 10) / 10, color: ty.color }))
+    .filter((d) => d.value > 0)
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10);
+
+  const exportRequests = (format: 'csv' | 'xlsx' = 'xlsx'): void => {
+    const rows = reqs.map((r) => [r.id, r.employeeName, r.employeeEmail, (world.employees.filter((e) => lc(e.email) === lc(r.employeeEmail))[0] || { department: '' }).department, r.kind, (config.leaveTypes.filter((x) => x.key === r.leaveType)[0] || { name: r.leaveType }).name, r.start, r.end, r.unit, r.hours, r.days, r.status, r.submittedBy ? r.submittedBy.email : '', r.created.substring(0, 10)]);
+    const cols = ['Id', 'Employee', 'Email', 'Department', 'Kind', 'Leave type', 'Start', 'End', 'Unit', 'Hours', 'Days', 'Status', 'Submitted by', 'Created'];
+    if (format === 'csv') download(`leave-requests-${viewYear}.csv`, toCsv(cols, rows));
+    else downloadXlsx(`leave-requests-${viewYear}.xlsx`, [{ name: 'Requests', columns: cols, rows }]);
+  };
+  const exportBalances = (format: 'csv' | 'xlsx' = 'xlsx'): void => {
     const types = config.leaveTypes.filter((ty) => ty.active);
     const headers = ['Employee', 'Email', 'Department', 'Grade', 'Start date'].concat(...types.map((ty) => [`${ty.name} entitled`, `${ty.name} taken`, `${ty.name} pending`, `${ty.name} available`]));
     const rows = balanceRows.map(({ e, b }) =>
@@ -62,7 +100,8 @@ export function Reports(): JSX.Element {
         })
       )
     );
-    download(`leave-balances-${viewYear}.csv`, toCsv(headers, rows));
+    if (format === 'csv') download(`leave-balances-${viewYear}.csv`, toCsv(headers, rows));
+    else downloadXlsx(`leave-balances-${viewYear}.xlsx`, [{ name: 'Balances', columns: headers, rows }]);
   };
 
   const feed = (key: 'requests' | 'employees' | 'ledger'): string => `${sp.webUrl}/_api/web/lists/getbytitle('${listTitle(svc.prefix, key)}')/items`;
@@ -105,8 +144,8 @@ export function Reports(): JSX.Element {
         style={{ marginTop: 16 }}
         actions={
           <span className="to-row">
-            <DefaultButton iconProps={{ iconName: 'ExcelDocument' }} text="Export balances" onClick={exportBalances} />
-            <DefaultButton iconProps={{ iconName: 'Download' }} text="Export requests" onClick={exportRequests} />
+            <DefaultButton iconProps={{ iconName: 'ExcelDocument' }} text="Export balances" onClick={() => exportBalances('xlsx')} menuProps={{ items: [{ key: 'csv', text: 'As CSV', onClick: () => exportBalances('csv') }] }} split />
+            <DefaultButton iconProps={{ iconName: 'Download' }} text="Export requests" onClick={() => exportRequests('xlsx')} menuProps={{ items: [{ key: 'csv', text: 'As CSV', onClick: () => exportRequests('csv') }] }} split />
           </span>
         }
       >
@@ -145,6 +184,83 @@ export function Reports(): JSX.Element {
         </div>
         {balanceRows.length > 200 && <div className="to-small to-muted" style={{ marginTop: 8 }}>Showing 200 of {balanceRows.length}; the export has everyone.</div>}
       </Card>
+      <Card
+        title="Leave register"
+        icon="ReportDocument"
+        style={{ marginTop: 16 }}
+        actions={<DefaultButton iconProps={{ iconName: 'ExcelDocument' }} text="Export to Excel" disabled={!register.length} onClick={exportRegister} />}
+      >
+        <div className="to-row" style={{ alignItems: 'flex-end', marginBottom: 12 }}>
+          <IsoDatePicker label="From" value={from} onChange={(d) => setFrom(d)} />
+          <IsoDatePicker label="To" value={to} onChange={(d) => setTo(d)} minDate={from} />
+          <span className="to-small to-muted">
+            {register.length} approved leave{register.length === 1 ? '' : 's'}, {fmtNum(register.reduce((a, r) => a + r.days, 0))} days ({fmtNum(register.filter((r) => !paidOf(r.leaveType)).reduce((a, r) => a + r.days, 0))} unpaid) — for payroll periods and audits.
+          </span>
+        </div>
+        <div className="to-table-wrap">
+          <table className="to-table">
+            <thead>
+              <tr>
+                <th>Employee</th>
+                <th>Leave type</th>
+                <th>Dates</th>
+                <th className="to-number">Days</th>
+              </tr>
+            </thead>
+            <tbody>
+              {register.slice(0, 50).map((r) => (
+                <tr key={r.id}>
+                  <td>{r.employeeName}</td>
+                  <td>
+                    {typeName(r.leaveType)}
+                    {!paidOf(r.leaveType) && <span className="to-badge is-warn">Unpaid</span>}
+                  </td>
+                  <td>
+                    {fmtDate(r.start)}
+                    {r.end !== r.start ? ` – ${fmtDate(r.end)}` : ''}
+                  </td>
+                  <td className="to-number">{fmtNum(r.days)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+      <div className="to-grid to-grid-2" style={{ marginTop: 16 }}>
+        <Card title="Absence pattern (Bradford factor, last 52 weeks)" icon="Health">
+          {bradford.length ? (
+            <table className="to-table">
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th className="to-number">Spells</th>
+                  <th className="to-number">Days</th>
+                  <th className="to-number">Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bradford.slice(0, 10).map((x) => (
+                  <tr key={x.e.email}>
+                    <td>{x.e.name}</td>
+                    <td className="to-number">{x.spells}</td>
+                    <td className="to-number">{fmtNum(x.days)}</td>
+                    <td className="to-number">
+                      <span className={x.score >= 250 ? 'to-danger' : ''}>{x.score}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="to-small to-muted">No sick leave in the last 52 weeks.</div>
+          )}
+          <p className="to-small to-muted">Score = spells² × days, from sick and medical leave. Many short absences score higher than one long one; 250+ is often a trigger for a conversation.</p>
+        </Card>
+        <Card title="Leave liability (unused paid days)" icon="Money">
+          <BarList items={liability} format={(v) => `${fmtNum(v)} d`} />
+          <p className="to-small to-muted">Days still available this leave year for paid leave types — what may be carried forward or paid out.</p>
+        </Card>
+      </div>
       <Card title="Connect Power BI" icon="PowerBILogo" style={{ marginTop: 16 }}>
         <p className="to-muted" style={{ marginTop: 0 }}>
           In Power BI Desktop choose <b>Get data › SharePoint Online list</b> (2.0), enter the site address below and pick the lists. Or use <b>OData feed</b> with the addresses. Refresh on a schedule in the Power BI service.

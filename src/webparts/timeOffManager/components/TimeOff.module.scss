@@ -2287,6 +2287,18 @@
       gap: 8px;
     }
 
+    .to-clash {
+      border: 1px solid var(--to-border);
+      border-left: 3px solid var(--to-success);
+      border-radius: var(--to-radius-sm);
+      padding: 10px 12px;
+      background: var(--to-surface-2);
+      &.is-over {
+        border-left-color: var(--to-danger);
+        background: #fdf3f1;
+      }
+    }
+
     // ------------------------------------------------------------- approvals
     .to-approvals-grid {
       grid-template-columns: minmax(0, 1fr) 320px;

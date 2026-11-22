@@ -12,6 +12,7 @@ import { Approvals } from './approvals/Approvals';
 import { TeamCalendar } from './calendar/TeamCalendar';
 import { Reports } from './dashboard/Reports';
 import { EmployeesPage } from './admin/EmployeesPage';
+import { MyTeam } from './team/MyTeam';
 import { AdminPage } from './admin/AdminPage';
 
 interface INavItem {
@@ -35,7 +36,9 @@ export function Shell(props: { requestForm?: IRequestFormOptions; closeRequestFo
     { key: 'requests', label: 'My leave', icon: 'Calendar' },
     { key: 'calendar', label: 'Team calendar', icon: 'CalendarWeek' }
   ];
+  const hasReports = world.employees.some((e) => e.active && (e.managerEmail || '').toLowerCase() === me.email.toLowerCase());
   if (isManager || isHr || waiting) items.push({ key: 'approvals', label: 'Approvals', icon: 'CheckList', section: 'Approve', count: waiting });
+  if (hasReports) items.push({ key: 'team', label: 'My team', icon: 'Group', section: isManager || isHr || waiting ? undefined : 'Approve' });
   if (isHr) {
     items.push({ key: 'people', label: 'Employees & balances', icon: 'People', section: 'Manage' });
     items.push({ key: 'reports', label: 'Reports', icon: 'BarChartVertical' });
@@ -54,6 +57,9 @@ export function Shell(props: { requestForm?: IRequestFormOptions; closeRequestFo
       break;
     case 'approvals':
       page = <Approvals />;
+      break;
+    case 'team':
+      page = <MyTeam />;
       break;
     case 'people':
       page = <EmployeesPage />;

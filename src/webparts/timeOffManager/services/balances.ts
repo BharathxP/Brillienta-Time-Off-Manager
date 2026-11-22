@@ -109,13 +109,18 @@ export function policyEntitlement(type: ILeaveType, e: IEmployee | undefined, ye
   const yStart = leaveYearStart(year, startMonth);
   const yEnd = leaveYearEnd(year, startMonth);
   const hire = e && e.hireDate;
+  const leaving = e && e.leavingDate;
   if (hire && hire > yEnd) return { annual: 0, entitled: 0, tenureExtra: 0 };
+  if (leaving && leaving < yStart) return { annual: 0, entitled: 0, tenureExtra: 0 };
   if (en.mode === 'fixed') {
     const a = annualDays(type, e, yStart);
     let entitled = a.days;
-    if (en.prorate && hire && hire > yStart) {
+    // Joiners (when the type prorates) and leavers (always) get the share of the year they work.
+    const from = en.prorate && hire && hire > yStart ? hire : yStart;
+    const to = leaving && leaving < yEnd ? leaving : yEnd;
+    if (from !== yStart || to !== yEnd) {
       const span = daysBetween(yStart, yEnd) + 1;
-      entitled = roundHalf((a.days * (daysBetween(hire, yEnd) + 1)) / span);
+      entitled = roundHalf((a.days * (daysBetween(from, to) + 1)) / span);
     }
     return { annual: a.days, entitled, tenureExtra: a.tenureExtra };
   }
@@ -128,6 +133,7 @@ export function policyEntitlement(type: ILeaveType, e: IEmployee | undefined, ye
   periods.forEach(([ps, pe]) => {
     const point = en.accrual.timing === 'start' ? ps : pe;
     if (hire && en.prorate && hire > point) return;
+    if (leaving && leaving < ps) return;
     full += per;
     if (point <= asOf) accrued += per;
   });
@@ -251,4 +257,22 @@ export function carryForwardDays(type: ILeaveType, closing: IBalance): number {
 /** Balances of every active type for one person. */
 export function allBalances(config: IConfig, e: IEmployee | undefined, year: number, ledger: ILedgerEntry[], requests: ILeaveRequest[], asOf: string): IBalance[] {
   return config.leaveTypes.filter((t) => t.active).map((t) => computeBalance(config, t, e, year, ledger, requests, asOf));
+}
+
+/**
+ * Bradford factor of absences in a window: S² × D, where S = number of separate spells and D = total days.
+ * Many short absences score higher than one long one. Spells on consecutive working days are one spell
+ * (requests that touch or overlap are merged).
+ */
+export function bradfordFactor(requests: Array<{ start: string; end: string; days: number }>): { spells: number; days: number; score: number } {
+  const sorted = requests.slice().sort((a, b) => (a.start < b.start ? -1 : 1));
+  let spells = 0;
+  let lastEnd = '';
+  let days = 0;
+  sorted.forEach((r) => {
+    days += r.days;
+    if (!lastEnd || r.start > addDays(lastEnd, 3)) spells++;
+    if (r.end > lastEnd) lastEnd = r.end;
+  });
+  return { spells, days: round2(days), score: Math.round(spells * spells * days) };
 }

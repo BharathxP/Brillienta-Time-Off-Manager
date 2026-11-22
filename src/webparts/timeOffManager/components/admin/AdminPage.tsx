@@ -2,17 +2,20 @@ import * as React from 'react';
 import { DefaultButton, Dropdown, Icon, MessageBar, MessageBarType, PrimaryButton, SpinButton, TextField, Toggle } from '@fluentui/react';
 import { useApp } from '../AppContext';
 import { IConfig } from '../../models/types';
-import { Card, PageHeader, PeopleField, useBusy } from '../common/Ui';
+import { Card, PageHeader, PeopleField, useBusy, useConfirm } from '../common/Ui';
 import { LeaveTypesAdmin } from './LeaveTypesAdmin';
 import { WorkflowsAdmin } from './WorkflowsAdmin';
 import { CalendarsAdmin } from './CalendarsAdmin';
 import { TemplatesAdmin } from './TemplatesAdmin';
 import { LicenseAdmin } from './LicenseAdmin';
+import { M365Admin, RulesAdmin } from './RulesAdmin';
+import { flowPackageZip } from '../../services/flowPackage';
+import { downloadBytes } from '../../services/exporting';
 import { DelegationCard } from '../approvals/Approvals';
 import { MONTH_NAMES, relativeTime } from '../../services/dates';
 import { Provisioner } from '../../services/Provisioner';
 import { SETTING_KEYS } from '../../services/SettingsStore';
-import { listTitle, LISTS } from '../../schema/schema';
+import { listTitle, LISTS, SCHEMA_VERSION } from '../../schema/schema';
 import { DEFAULT_ACCENT, DEFAULT_BRAND } from '../../schema/defaults';
 
 export interface ISectionProps {
@@ -26,6 +29,8 @@ const SECTIONS: Array<{ key: string; label: string; icon: string; adminOnly?: bo
   { key: 'workflows', label: 'Approval workflows', icon: 'Flow' },
   { key: 'calendars', label: 'Work weeks & holidays', icon: 'Calendar' },
   { key: 'templates', label: 'Leave templates', icon: 'Lightning' },
+  { key: 'rules', label: 'Blackouts & staffing', icon: 'Blocked' },
+  { key: 'm365', label: 'Teams & Outlook', icon: 'TeamsLogo' },
   { key: 'delegation', label: 'Delegations', icon: 'Switch' },
   { key: 'notifications', label: 'Notifications & reminders', icon: 'Ringer' },
   { key: 'integrations', label: 'Power Automate & API', icon: 'PlugConnected' },
@@ -42,7 +47,7 @@ export function AdminPage(props: { section?: string }): JSX.Element {
   const [busy, run] = useBusy();
   React.useEffect(() => setDraft(config), [config]);
   const dirty = JSON.stringify(draft) !== JSON.stringify(config);
-  const editsConfig = ['general', 'types', 'workflows', 'calendars', 'templates', 'notifications', 'integrations', 'access'].indexOf(section.key) >= 0;
+  const editsConfig = ['general', 'types', 'workflows', 'calendars', 'templates', 'rules', 'm365', 'notifications', 'integrations', 'access'].indexOf(section.key) >= 0;
   const sp: ISectionProps = { draft, setDraft };
   let body: JSX.Element;
   switch (section.key) {
@@ -57,6 +62,12 @@ export function AdminPage(props: { section?: string }): JSX.Element {
       break;
     case 'templates':
       body = <TemplatesAdmin {...sp} />;
+      break;
+    case 'rules':
+      body = <RulesAdmin {...sp} />;
+      break;
+    case 'm365':
+      body = <M365Admin {...sp} />;
       break;
     case 'delegation':
       body = <DelegationCard forAll />;
@@ -247,6 +258,8 @@ function NotificationsAdmin(props: ISectionProps): JSX.Element {
         </div>
       </Card>
       <Card title="Send the emails with Power Automate" icon="Mail">
+        <FlowPackage />
+        <div className="to-small to-muted" style={{ margin: '12px 0 8px' }}>Or build it by hand:</div>
         <FlowSteps
           steps={[
             <>
@@ -262,6 +275,26 @@ function NotificationsAdmin(props: ISectionProps): JSX.Element {
         />
       </Card>
     </>
+  );
+}
+
+/** A ready-made flow for the email queue: Power Automate › My flows › Import › Import package (legacy). */
+function FlowPackage(): JSX.Element {
+  const { sp, svc, config, toast } = useApp();
+  const [shared, setShared] = React.useState('');
+  const [busy, run] = useBusy();
+  const make = (): Promise<boolean> =>
+    run(async () => {
+      const list = await sp.get<{ Id: string }>(`${sp.list(svc.title('emailQueue'))}?$select=Id`);
+      const zip = flowPackageZip({ siteUrl: sp.webUrl, listId: list.Id, listTitle: svc.title('emailQueue'), displayName: `${config.appName} – send emails`, sharedMailbox: shared.trim(), allowedDomains: [], useReplyTo: false });
+      downloadBytes('time-off-manager-email-flow.zip', zip, 'application/zip');
+      toast('Flow package downloaded. Import it in Power Automate and pick your connections.', 'success');
+    });
+  return (
+    <div className="to-row" style={{ alignItems: 'flex-end' }}>
+      <TextField label="Send from a shared mailbox (optional)" value={shared} onChange={(_, v) => setShared(v || '')} placeholder="hr@contoso.com" styles={{ root: { minWidth: 260 } }} />
+      <PrimaryButton iconProps={{ iconName: 'Download' }} text="Download the flow package" disabled={busy} onClick={() => void make()} />
+    </div>
   );
 }
 
@@ -351,6 +384,10 @@ function AccessAdmin(props: ISectionProps): JSX.Element {
           <DefaultButton text="Validate & repair lists" disabled={busy} onClick={() => void run(async () => {
             const out: string[] = [];
             const res = await prov.ensureSchema((m) => out.push(m));
+            if (res.ok) {
+              await settings.set(SETTING_KEYS.schemaVersion, String(SCHEMA_VERSION));
+              svc.schemaVersion = SCHEMA_VERSION;
+            }
             setLog(out.concat(res.errors));
           }, 'Lists checked.')} />
           <PrimaryButton text="Apply recommended permissions" disabled={busy} onClick={() => void run(async () => {
@@ -363,7 +400,33 @@ function AccessAdmin(props: ISectionProps): JSX.Element {
         </div>
         {log.length > 0 && <pre className="to-log">{log.join('\n')}</pre>}
       </Card>
+      <SampleData />
     </>
+  );
+}
+
+function SampleData(): JSX.Element | null {
+  const { world, engine, reload, me } = useApp();
+  const [busy, run] = useBusy();
+  const [ask, dialog] = useConfirm();
+  const sample = world.employees.filter((e) => /@example\.com$/i.test(e.email)).length;
+  if (!sample) return null;
+  return (
+    <Card title="Sample organisation" icon="Delete">
+      {dialog}
+      <p className="to-muted" style={{ marginTop: 0 }}>{sample} sample people (@example.com) with their requests and balances are in the lists.</p>
+      <DefaultButton
+        text="Remove the sample data"
+        disabled={busy}
+        onClick={async () => {
+          if (!(await ask('Remove the sample organisation?', 'Sample people, their requests and ledger entries are deleted. Your own data stays.', 'Remove'))) return;
+          await run(async () => {
+            await engine.removeSampleData(world, { email: me.email, name: me.title });
+            await reload();
+          }, 'Sample data removed.');
+        }}
+      />
+    </Card>
   );
 }
 

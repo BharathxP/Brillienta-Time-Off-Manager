@@ -154,6 +154,7 @@ function LeaveTypeEditor(p: { type: ILeaveType; props: ISectionProps; onChange: 
               </div>
             </div>
             <Toggle label="Count every calendar day (weekends and holidays included)" checked={t.countCalendarDays} onChange={(_, c) => set({ countCalendarDays: !!c })} onText="Calendar days" offText="Working days only (non-working days excluded)" />
+            <Toggle label="Sandwich rule: weekends and holidays between leave days count" checked={!!t.sandwich} onChange={(_, c) => set({ sandwich: !!c })} disabled={t.countCalendarDays} />
             <Toggle label="Can repeat (weekly, bi-weekly, monthly)" checked={t.allowRecurrence} onChange={(_, c) => set({ allowRecurrence: !!c })} />
           </div>
         </PivotItem>

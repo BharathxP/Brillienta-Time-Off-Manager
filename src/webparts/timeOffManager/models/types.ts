@@ -33,6 +33,8 @@ export interface IEmployee {
   calendar?: string;
   location?: string;
   gender?: string;
+  /** Last working day: entitlements are prorated to it and no leave can be requested after it. */
+  leavingDate?: string;
   active: boolean;
 }
 
@@ -94,6 +96,11 @@ export interface ILeaveType {
   allowRecurrence: boolean;
   /** Comp off: what the credit is earned for. */
   isCompOff?: boolean;
+  /**
+   * Sandwich rule: weekends and holidays that fall between two leave days of the same request count as leave
+   * (e.g. Friday + Monday = 4 days).
+   */
+  sandwich?: boolean;
 }
 
 // ------------------------------------------------------------------ workflows
@@ -135,6 +142,7 @@ export interface IApprovalStep {
 // ------------------------------------------------------------------ requests
 
 export type RequestKind = 'leave' | 'compoff';
+export type PartialDays = '' | 'start' | 'end' | 'both';
 export type RequestStatus = 'Pending' | 'Approved' | 'Rejected' | 'Cancelled' | 'CancelRequested';
 
 export interface IHistoryEntry {
@@ -154,6 +162,8 @@ export interface ILeaveRequest {
   end: string;
   unit: LeaveUnit;
   halfDayPart?: 'am' | 'pm';
+  /** Multi-day leave that starts in the afternoon ('start'), ends at midday ('end') or both. */
+  partial?: PartialDays;
   startTime?: string;
   hours: number;
   /** Days consumed (or credited, comp off). */
@@ -168,6 +178,10 @@ export interface ILeaveRequest {
   seriesRule?: string;
   history: IHistoryEntry[];
   calendarEventId?: string;
+  /** Event on the Microsoft 365 group (Teams channel) calendar. */
+  groupEventId?: string;
+  /** Set the employee's Outlook automatic reply for the leave. */
+  autoReply?: boolean;
   cancelReason?: string;
   hasAttachment?: boolean;
   created: string;
@@ -253,6 +267,19 @@ export interface IRecurrence {
 
 // ------------------------------------------------------------------ configuration
 
+/** Dates when leave is not allowed (or only with a warning), e.g. year-end close or a product launch. */
+export interface IBlackout {
+  key: string;
+  name: string;
+  from: string;
+  to: string;
+  /** Empty = every department. */
+  departments: string[];
+  /** Empty = every leave type. */
+  leaveTypes: string[];
+  mode: 'block' | 'warn';
+}
+
 export interface IConfig {
   appName: string;
   orgName: string;
@@ -282,6 +309,13 @@ export interface IConfig {
   calendarSync: { outlook: boolean; showAs: 'oof' | 'free' | 'busy' };
   teamCalendar: { scope: 'team' | 'department' | 'everyone'; showLeaveType: boolean };
   compOff: { enabled: boolean; leaveType: string; requireNonWorkingDay: boolean; maxDaysPerClaim: number };
+  blackouts: IBlackout[];
+  /** Minimum staffing: how many of a department may be away on the same day. */
+  staffing: { enabled: boolean; maxAwayPercent: number; maxAwayCount: number; mode: 'warn' | 'block'; perDepartment: Record<string, number> };
+  /** Publish approved leave to a Microsoft 365 group calendar (the Teams channel calendar). */
+  groupCalendar: { enabled: boolean; groupId: string; groupName: string };
+  /** Offer employees an Outlook automatic reply during their leave. */
+  autoReply: { enabled: boolean; message: string };
 }
 
 export interface ISetupState {

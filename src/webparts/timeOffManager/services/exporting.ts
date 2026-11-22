@@ -1,3 +1,4 @@
+import { IXlsxSheet, xlsxWorkbook } from './xlsx';
 import { IConfig, ILeaveRequest } from '../models/types';
 import { addDays } from './dates';
 
@@ -82,4 +83,32 @@ export function parseCsv(text: string): string[][] {
   row.push(cell.trim());
   if (row.some((c) => c !== '')) rows.push(row);
   return rows;
+}
+
+/** Save an Excel workbook (.xlsx) with one or more sheets. */
+export function downloadXlsx(name: string, sheets: IXlsxSheet[]): void {
+  const bytes = xlsxWorkbook(sheets);
+  const blob = new Blob([bytes as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  window.setTimeout(() => {
+    URL.revokeObjectURL(a.href);
+    a.remove();
+  }, 500);
+}
+
+/** Save raw bytes (e.g. the Power Automate flow package). */
+export function downloadBytes(name: string, bytes: Uint8Array, type: string): void {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([bytes as BlobPart], { type }));
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  window.setTimeout(() => {
+    URL.revokeObjectURL(a.href);
+    a.remove();
+  }, 500);
 }

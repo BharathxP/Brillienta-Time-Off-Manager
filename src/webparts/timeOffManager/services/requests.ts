@@ -1,7 +1,7 @@
 // Request drafts: how long they are, whether they are allowed, and recurring series. Pure functions
 // (unit tested in tests/requests.test.cjs).
 
-import { IConfig, IEmployee, ILeaveRequest, ILeaveType, IRecurrence, LeaveUnit } from '../models/types';
+import { IBlackout, IConfig, IEmployee, ILeaveRequest, ILeaveType, IRecurrence, LeaveUnit, PartialDays } from '../models/types';
 import { IBalance } from './balances';
 import { addDays, addMonths, calendarFor, countDays, daysBetween, eachDay, fmtDate, isIsoDate, isWorkingDay, leaveYearOf, weekday, WEEKDAY_SHORT } from './dates';
 import { lc } from './workflow';
@@ -14,11 +14,13 @@ export interface IDraft {
   end: string;
   unit: LeaveUnit;
   halfDayPart?: 'am' | 'pm';
+  partial?: PartialDays;
   startTime?: string;
   hours?: number;
   reason: string;
   recurrence?: IRecurrence;
   hasAttachment?: boolean;
+  autoReply?: boolean;
 }
 
 export interface IDuration {
@@ -29,7 +31,7 @@ export interface IDuration {
 }
 
 /** Days (and hours) a draft takes from the balance. */
-export function duration(config: IConfig, type: ILeaveType | undefined, e: IEmployee | undefined, d: Pick<IDraft, 'start' | 'end' | 'unit' | 'hours' | 'kind'>): IDuration {
+export function duration(config: IConfig, type: ILeaveType | undefined, e: IEmployee | undefined, d: Pick<IDraft, 'start' | 'end' | 'unit' | 'hours' | 'kind' | 'partial'>): IDuration {
   const cal = calendarFor(config, e);
   const calendarDays = !!type && type.countCalendarDays;
   if (d.kind === 'compoff') {
@@ -47,7 +49,66 @@ export function duration(config: IConfig, type: ILeaveType | undefined, e: IEmpl
     return { days: round2(h / cal.hoursPerDay), hours: h, excluded: [], counted: c.counted };
   }
   const c = countDays(cal, d.start, d.end, calendarDays);
-  return { days: c.days, hours: c.days * cal.hoursPerDay, excluded: c.excluded, counted: c.counted };
+  let days = c.days;
+  let excluded = c.excluded;
+  // Sandwich rule: non-working days between the first and last leave day count too.
+  if (type && type.sandwich && c.counted.length > 1) {
+    const first = c.counted[0];
+    const last = c.counted[c.counted.length - 1];
+    const inside = excluded.filter((x) => x.date > first && x.date < last);
+    days += inside.length;
+    excluded = excluded.filter((x) => !(x.date > first && x.date < last));
+  }
+  // Partial first / last day of a multi-day request.
+  if (d.partial && c.counted.length > 1) {
+    if ((d.partial === 'start' || d.partial === 'both') && c.counted[0] === d.start) days -= 0.5;
+    if ((d.partial === 'end' || d.partial === 'both') && c.counted[c.counted.length - 1] === d.end) days -= 0.5;
+  }
+  return { days, hours: days * cal.hoursPerDay, excluded, counted: c.counted };
+}
+
+/** Blackout periods that cover any day of the draft for this person and leave type. */
+export function blackoutsFor(config: IConfig, e: IEmployee | undefined, leaveType: string, start: string, end: string): IBlackout[] {
+  return (config.blackouts || []).filter(
+    (b) => b.from <= end && b.to >= start && (!b.departments.length || (!!e && b.departments.indexOf(e.department || '') >= 0)) && (!b.leaveTypes.length || b.leaveTypes.indexOf(leaveType) >= 0)
+  );
+}
+
+export interface IClash {
+  /** Colleagues in the same department away during the draft (approved or pending). */
+  away: Array<{ name: string; email: string; start: string; end: string; status: string }>;
+  /** Busiest day: how many of the department would be away including this request. */
+  peak: { date: string; count: number; size: number };
+  /** The most the department may have away on one day (0 = no limit). */
+  limit: number;
+}
+
+/** Who else in the department is away, and whether the request would go over the staffing limit. */
+export function teamClash(config: IConfig, employees: IEmployee[], requests: ILeaveRequest[], e: IEmployee | undefined, start: string, end: string, excludeId?: number): IClash {
+  const empty: IClash = { away: [], peak: { date: start, count: 0, size: 0 }, limit: 0 };
+  if (!e || !e.department || !isIsoDate(start)) return empty;
+  const dept = employees.filter((x) => x.active && x.department === e.department);
+  const emails = dept.map((x) => lc(x.email));
+  const open = requests.filter(
+    (r) => r.kind === 'leave' && r.id !== excludeId && (r.status === 'Approved' || r.status === 'Pending' || r.status === 'CancelRequested') && r.start <= end && r.end >= start && lc(r.employeeEmail) !== lc(e.email) && emails.indexOf(lc(r.employeeEmail)) >= 0
+  );
+  const away = open.map((r) => ({ name: r.employeeName, email: r.employeeEmail, start: r.start, end: r.end, status: r.status }));
+  let peak = { date: start, count: 1, size: dept.length };
+  eachDay(start, end, 62).forEach((d) => {
+    const people = open.filter((r) => r.start <= d && r.end >= d).map((r) => lc(r.employeeEmail)).filter((x, i, all) => all.indexOf(x) === i);
+    if (people.length + 1 > peak.count) peak = { date: d, count: people.length + 1, size: dept.length };
+  });
+  const st = config.staffing;
+  let limit = 0;
+  if (st && st.enabled) {
+    const own = st.perDepartment && st.perDepartment[e.department];
+    if (own && own > 0) limit = own;
+    else {
+      const byPct = st.maxAwayPercent > 0 ? Math.max(1, Math.floor((dept.length * st.maxAwayPercent) / 100)) : 0;
+      limit = [byPct, st.maxAwayCount].filter((n) => n > 0).reduce((a, b) => (a === 0 ? b : Math.min(a, b)), 0);
+    }
+  }
+  return { away, peak, limit };
 }
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -67,7 +128,8 @@ export function validateDraft(
   balance: IBalance | undefined,
   existing: ILeaveRequest[],
   today: string,
-  privileged: boolean
+  privileged: boolean,
+  ctx?: { employees: IEmployee[]; excludeId?: number }
 ): IValidation {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -118,8 +180,24 @@ export function validateDraft(
       errors.push(`Not enough ${type.name}: ${round2(balance.available)} available, ${dur.days} requested.`);
     } else if (after < 0) warnings.push(`This takes the balance to ${round2(after)} days.`);
   }
-  const clash = overlapping(existing, d);
+  const clash = overlapping(existing.filter((r) => !ctx || r.id !== ctx.excludeId), d);
   if (clash.length) errors.push(`You already have time off on these days (${clash.map((r) => fmtDate(r.start)).join(', ')}).`);
+  const last = d.unit === 'day' ? d.end : d.start;
+  if (e && e.leavingDate && last > e.leavingDate) errors.push(`The last working day is ${fmtDate(e.leavingDate)}; leave cannot go beyond it.`);
+  if (d.partial && d.unit === 'day' && d.start === d.end) errors.push('Partial first / last days are for leave over several days. For one day, choose Half day.');
+  blackoutsFor(config, e, type.key, d.start, last).forEach((b) => {
+    const msg = `${b.name}: leave is ${b.mode === 'block' ? 'not allowed' : 'discouraged'} from ${fmtDate(b.from)} to ${fmtDate(b.to)}.`;
+    if (b.mode === 'block' && !privileged) errors.push(msg);
+    else warnings.push(msg);
+  });
+  if (ctx && e) {
+    const tc = teamClash(config, ctx.employees, existing, e, d.start, last, ctx.excludeId);
+    if (tc.limit > 0 && tc.peak.count > tc.limit) {
+      const msg = `Staffing: ${tc.peak.count} of ${tc.peak.size} people in ${e.department} would be away on ${fmtDate(tc.peak.date)} (the limit is ${tc.limit}).`;
+      if (config.staffing.mode === 'block' && !privileged) errors.push(msg);
+      else warnings.push(msg);
+    }
+  }
   return { errors, warnings };
 }
 

@@ -5,12 +5,14 @@ import { ILeaveRequest } from '../../models/types';
 import { PersonLine, StatusBadge, TypeChip, useBusy, useConfirm } from '../common/Ui';
 import { fmtDate, fmtDays, fmtRange, relativeTime, today } from '../../services/dates';
 import { canDecide, lc } from '../../services/workflow';
+import { teamClash } from '../../services/requests';
 import { download, toIcs } from '../../services/exporting';
 
 export function lengthText(r: ILeaveRequest): string {
   if (r.unit === 'hours') return `${r.hours} h${r.startTime ? ' from ' + r.startTime : ''}`;
   if (r.unit === 'half') return `Half day (${r.halfDayPart === 'pm' ? 'afternoon' : 'morning'})`;
-  return fmtDays(r.days);
+  const part = r.partial === 'start' ? ' · from the afternoon' : r.partial === 'end' ? ' · back in the afternoon' : r.partial === 'both' ? ' · half first and last day' : '';
+  return fmtDays(r.days) + part;
 }
 
 /** One request: what, when, the approval route and history, and what the viewer may do with it. */
@@ -32,6 +34,9 @@ export function RequestDetails(props: { request: ILeaveRequest; onClose: () => v
   }, [r.id]);
   const series = r.seriesId ? world.requests.filter((x) => x.seriesId === r.seriesId) : [];
   const openSeries = series.filter((x) => (x.status === 'Pending' || x.status === 'Approved') && x.start > today());
+  const canEdit = r.status === 'Pending' && (mine || isHr || isAdmin || (!!r.submittedBy && lc(r.submittedBy.email) === lc(me.email)));
+  const employee = app.dir.byEmail[lc(r.employeeEmail)];
+  const clash = decision.ok && r.kind === 'leave' ? teamClash(config, world.employees, world.requests, employee, r.start, r.end, r.id) : undefined;
 
   const act = async (d: 'approve' | 'reject'): Promise<void> => {
     if (d === 'reject' && !comment.trim()) {
@@ -97,6 +102,12 @@ export function RequestDetails(props: { request: ILeaveRequest; onClose: () => v
               </dd>
             </>
           )}
+          {r.autoReply && (
+            <>
+              <dt>Outlook</dt>
+              <dd>Automatic reply {r.history.some((h) => h.action === 'Automatic reply scheduled') ? 'scheduled' : 'set when the leave is approved'}</dd>
+            </>
+          )}
           {r.cancelReason && (
             <>
               <dt>Cancellation</dt>
@@ -142,6 +153,21 @@ export function RequestDetails(props: { request: ILeaveRequest; onClose: () => v
             <div className="to-small to-muted">No approval needed.</div>
           )}
         </div>
+        {clash && (clash.away.length > 0 || clash.limit > 0) && (
+          <div className={'to-clash' + (clash.limit > 0 && clash.peak.count > clash.limit ? ' is-over' : '')}>
+            <div className="to-label">
+              Team cover · {employee && employee.department}
+            </div>
+            <div className="to-small">
+              Up to {clash.peak.count} of {clash.peak.size} away on {fmtDate(clash.peak.date)} with this request{clash.limit > 0 ? ` (limit ${clash.limit})` : ''}.
+            </div>
+            {clash.away.slice(0, 6).map((a, i) => (
+              <div key={i} className="to-small to-muted">
+                {a.name}: {fmtRange(a.start, a.end)}{a.status !== 'Approved' ? ' (pending)' : ''}
+              </div>
+            ))}
+          </div>
+        )}
         {decision.ok && (
           <div className="to-decide">
             {decision.onBehalf && (
@@ -155,6 +181,16 @@ export function RequestDetails(props: { request: ILeaveRequest; onClose: () => v
           </div>
         )}
         <div className="to-row">
+          {canEdit && (
+            <DefaultButton
+              iconProps={{ iconName: 'Edit' }}
+              text="Change"
+              onClick={() => {
+                props.onClose();
+                app.openRequest({ edit: r });
+              }}
+            />
+          )}
           {canCancel && <DefaultButton iconProps={{ iconName: 'EventDecline' }} text={r.status === 'Pending' ? 'Withdraw' : 'Cancel leave'} disabled={busy} onClick={() => void cancel(false)} />}
           {canCancel && openSeries.length > 1 && <DefaultButton text={`Cancel the series (${openSeries.length})`} disabled={busy} onClick={() => void cancel(true)} />}
           {r.status === 'Pending' && (mine || isHr) && (

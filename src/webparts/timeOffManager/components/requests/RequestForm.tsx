@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { Checkbox, ChoiceGroup, DatePicker, DayOfWeek, DefaultButton, Dropdown, Icon, IDropdownOption, MessageBar, MessageBarType, Panel, PanelType, PrimaryButton, SpinButton, TextField } from '@fluentui/react';
 import { IRequestFormOptions, useApp } from '../AppContext';
-import { ILeaveTemplate, IRecurrence, LeaveUnit, RecurrenceFreq } from '../../models/types';
+import { ILeaveTemplate, IRecurrence, LeaveUnit, PartialDays, RecurrenceFreq } from '../../models/types';
 import { EmployeePicker, TypeChip } from '../common/Ui';
 import { addDays, fmtDate, fmtDays, fmtNum, leaveYearOf, today, WEEKDAY_SHORT, calendarFor, addTime } from '../../services/dates';
-import { IDraft, duration, occurrences, validateDraft, describeRecurrence } from '../../services/requests';
+import { IDraft, duration, occurrences, validateDraft, describeRecurrence, teamClash } from '../../services/requests';
 import { computeBalance } from '../../services/balances';
 import { buildSteps, lc } from '../../services/workflow';
 
@@ -67,11 +67,26 @@ export function RequestForm(props: { options: IRequestFormOptions; onClose: () =
   const { config, me, world, dir, engine, isHr, isAdmin, toast, licensed } = app;
   const canSubmitFor = useSubmitFor();
   const o = props.options;
-  const [kind, setKind] = React.useState<'leave' | 'compoff'>(o.kind || 'leave');
-  const [email, setEmail] = React.useState(o.employeeEmail || me.email);
+  const editing = o.edit;
+  const [kind, setKind] = React.useState<'leave' | 'compoff'>(editing ? editing.kind : o.kind || 'leave');
+  const [email, setEmail] = React.useState(editing ? editing.employeeEmail : o.employeeEmail || me.email);
   const employee = dir.byEmail[lc(email)];
   const firstType = config.leaveTypes.filter((t) => t.active && !t.isCompOff)[0];
-  const [draft, setDraft] = React.useState<IDraft>(() => ({
+  const [draft, setDraft] = React.useState<IDraft>(() => editing ? {
+    kind: editing.kind,
+    employeeEmail: editing.employeeEmail,
+    leaveType: editing.leaveType,
+    start: editing.start,
+    end: editing.end,
+    unit: editing.unit,
+    halfDayPart: editing.halfDayPart || 'am',
+    partial: editing.partial || '',
+    startTime: editing.startTime || calendarFor(config, employee).dayStart,
+    hours: editing.hours || 2,
+    reason: editing.reason,
+    autoReply: !!editing.autoReply,
+    recurrence: { freq: 'none', weekdays: [], count: 4 }
+  } : ({
     kind: o.kind || 'leave',
     employeeEmail: o.employeeEmail || me.email,
     leaveType: o.leaveType || (firstType ? firstType.key : ''),
@@ -82,6 +97,8 @@ export function RequestForm(props: { options: IRequestFormOptions; onClose: () =
     startTime: calendarFor(config, employee).dayStart,
     hours: 2,
     reason: '',
+    partial: '',
+    autoReply: config.autoReply.enabled,
     recurrence: { freq: 'none', weekdays: [], count: 4 }
   }));
   const [files, setFiles] = React.useState<File[]>([]);
@@ -109,14 +126,27 @@ export function RequestForm(props: { options: IRequestFormOptions; onClose: () =
 
   const typeKey = kind === 'compoff' ? config.compOff.leaveType : draft.leaveType;
   const type = config.leaveTypes.filter((t) => t.key === typeKey)[0];
-  const full: IDraft = { ...draft, kind, employeeEmail: email, leaveType: typeKey, end: draft.unit === 'day' ? draft.end : draft.start, hasAttachment: files.length > 0 };
+  const full: IDraft = {
+    ...draft,
+    kind,
+    employeeEmail: email,
+    leaveType: typeKey,
+    end: draft.unit === 'day' ? draft.end : draft.start,
+    partial: draft.unit === 'day' && draft.end > draft.start ? draft.partial : '',
+    recurrence: editing ? undefined : draft.recurrence,
+    hasAttachment: files.length > 0 || (!!editing && !!editing.hasAttachment)
+  };
   const dur = duration(config, type, employee, full);
   const year = leaveYearOf(full.start || today(), config.yearStartMonth);
   const balance = type && employee ? computeBalance(config, type, employee, year, world.ledger, world.requests, today()) : undefined;
   const privileged = isHr || isAdmin || lc(email) !== lc(me.email);
-  const v = validateDraft(config, type, employee, full, dur, kind === 'compoff' ? undefined : balance, world.requests, today(), privileged);
+  // While editing, the request's own days are not "used" twice.
+  const ownDays = editing && balance && editing.leaveType === typeKey && editing.leaveYear === year ? editing.days : 0;
+  const bal = balance && ownDays ? { ...balance, available: balance.available + ownDays, pending: balance.pending - ownDays } : balance;
+  const v = validateDraft(config, type, employee, full, dur, kind === 'compoff' ? undefined : bal, world.requests, today(), privileged, { employees: world.employees, excludeId: editing ? editing.id : undefined });
+  const clash = kind === 'leave' && employee ? teamClash(config, world.employees, world.requests, employee, full.start, full.end, editing ? editing.id : undefined) : undefined;
   if (employee && !licensed.has(lc(employee.email))) v.errors.push('This person is above the number of users in the licence. Ask your admin to add users.');
-  const recurring = kind === 'leave' && !!type && type.allowRecurrence && !!draft.recurrence && draft.recurrence.freq !== 'none';
+  const recurring = !editing && kind === 'leave' && !!type && type.allowRecurrence && !!draft.recurrence && draft.recurrence.freq !== 'none';
   const starts = recurring ? occurrences(full.start, draft.recurrence) : [full.start];
   const steps = type && employee ? buildSteps(config, dir, world.delegations, type, employee, dur.days, today()) : [];
   const auto = kind === 'leave' && !!type && type.autoApprove.enabled && (type.autoApprove.maxDays <= 0 || dur.days <= type.autoApprove.maxDays);
@@ -145,6 +175,14 @@ export function RequestForm(props: { options: IRequestFormOptions; onClose: () =
     setError('');
     setBusy(true);
     try {
+      if (editing) {
+        const next = await engine.edit(world, editing, full, { email: me.email, name: me.title, isHr, isAdmin }, files);
+        await app.reload();
+        app.bumpNotifications();
+        toast(next.status === 'Approved' ? 'Changed and approved by the leave policy.' : 'Changed. The approval starts again.', 'success');
+        props.onClose();
+        return;
+      }
       const created = await engine.submit(world, full, { email: me.email, name: me.title, isHr, isAdmin }, files);
       await app.reload();
       app.bumpNotifications();
@@ -177,12 +215,12 @@ export function RequestForm(props: { options: IRequestFormOptions; onClose: () =
       type={PanelType.custom}
       customWidth="760px"
       onDismiss={props.onClose}
-      headerText={kind === 'compoff' ? 'Claim comp off' : 'Request time off'}
+      headerText={editing ? 'Change request' : kind === 'compoff' ? 'Claim comp off' : 'Request time off'}
       closeButtonAriaLabel="Close"
       isFooterAtBottom
       onRenderFooterContent={() => (
         <div className="to-row">
-          <PrimaryButton text={busy ? 'Submitting…' : kind === 'compoff' ? 'Submit claim' : recurring ? `Submit ${starts.length} requests` : auto ? 'Submit (auto-approved)' : 'Submit request'} disabled={busy || v.errors.length > 0} onClick={() => void submit()} />
+          <PrimaryButton text={busy ? 'Submitting…' : editing ? 'Save changes' : kind === 'compoff' ? 'Submit claim' : recurring ? `Submit ${starts.length} requests` : auto ? 'Submit (auto-approved)' : 'Submit request'} disabled={busy || v.errors.length > 0} onClick={() => void submit()} />
           <DefaultButton text="Cancel" onClick={props.onClose} />
           {v.errors.length > 0 && <span className="to-small to-muted">{v.errors.length} thing{v.errors.length === 1 ? '' : 's'} to fix</span>}
         </div>
@@ -190,7 +228,7 @@ export function RequestForm(props: { options: IRequestFormOptions; onClose: () =
     >
       <div className="to-request-form">
         <div className="to-stack">
-          {config.compOff.enabled && (
+          {config.compOff.enabled && !editing && (
             <ChoiceGroup
               selectedKey={kind}
               options={[
@@ -201,7 +239,7 @@ export function RequestForm(props: { options: IRequestFormOptions; onClose: () =
               styles={{ flexContainer: { display: 'flex', gap: 8 } }}
             />
           )}
-          {(isHr || app.isManager) && (
+          {(isHr || app.isManager) && !editing && (
             <EmployeePicker label="For" value={email} onChange={(e) => e && setEmail(e.email)} filter={(e) => canSubmitFor(e.email)} />
           )}
           {lc(email) !== lc(me.email) && (
@@ -209,7 +247,7 @@ export function RequestForm(props: { options: IRequestFormOptions; onClose: () =
               You are submitting on behalf of {employee ? employee.name : email}. They are told, and the history shows it was you.
             </MessageBar>
           )}
-          {kind === 'leave' && myTemplates.length > 0 && (
+          {kind === 'leave' && !editing && myTemplates.length > 0 && (
             <div>
               <div className="to-label">Start from a template</div>
               <div className="to-chips">
@@ -267,7 +305,20 @@ export function RequestForm(props: { options: IRequestFormOptions; onClose: () =
               </>
             )}
           </div>
-          {kind === 'leave' && type && type.allowRecurrence && (
+          {kind === 'leave' && draft.unit === 'day' && draft.end > draft.start && (type ? type.units.half : false) && (
+            <Dropdown
+              label="First and last day"
+              selectedKey={draft.partial || ''}
+              options={[
+                { key: '', text: 'Full days' },
+                { key: 'start', text: 'Start in the afternoon of the first day' },
+                { key: 'end', text: 'Come back in the afternoon of the last day' },
+                { key: 'both', text: 'Both (half first day and half last day)' }
+              ]}
+              onChange={(_, op) => op && set({ partial: op.key as PartialDays })}
+            />
+          )}
+          {kind === 'leave' && !editing && type && type.allowRecurrence && (
             <div className="to-recur">
               <Dropdown label="Repeat" selectedKey={rec.freq} options={FREQ_OPTIONS} onChange={(_, op) => op && setRec({ freq: op.key as RecurrenceFreq })} />
               {(rec.freq === 'weekly' || rec.freq === 'biweekly') && (
@@ -301,6 +352,13 @@ export function RequestForm(props: { options: IRequestFormOptions; onClose: () =
             <div className="to-label">Supporting document{type && type.attachmentOverDays > 0 ? ` (needed over ${type.attachmentOverDays} day${type.attachmentOverDays === 1 ? '' : 's'})` : ' (optional)'}</div>
             <input type="file" multiple onChange={(e) => setFiles(Array.from(e.target.files || []))} aria-label="Attach files" />
           </div>
+          {kind === 'leave' && draft.unit === 'day' && config.autoReply.enabled && (
+            <Checkbox
+              label="Set an Outlook automatic reply for these days"
+              checked={!!draft.autoReply}
+              onChange={(_, c) => set({ autoReply: !!c })}
+            />
+          )}
           {error && <MessageBar messageBarType={MessageBarType.error}>{error}</MessageBar>}
         </div>
         <aside className="to-summary">
@@ -314,14 +372,14 @@ export function RequestForm(props: { options: IRequestFormOptions; onClose: () =
               </span>
             )}
           </div>
-          {kind === 'leave' && balance && (
+          {kind === 'leave' && bal && (
             <div className="to-summary-row">
               <span>Balance</span>
-              {balance.unlimited ? (
+              {bal.unlimited ? (
                 <strong>No limit</strong>
               ) : (
                 <strong>
-                  {fmtNum(balance.available)} → <span className={balance.available - dur.days < 0 ? 'to-danger' : ''}>{fmtNum(balance.available - dur.days * starts.length)}</span>
+                  {fmtNum(bal.available)} → <span className={bal.available - dur.days < 0 ? 'to-danger' : ''}>{fmtNum(bal.available - dur.days * starts.length)}</span>
                 </strong>
               )}
             </div>
@@ -364,6 +422,19 @@ export function RequestForm(props: { options: IRequestFormOptions; onClose: () =
               <div className="to-small to-muted">No approver is set up, so it is approved straight away.</div>
             )}
           </div>
+          {clash && clash.away.length > 0 && (
+            <div className="to-summary-block">
+              <div className="to-label">
+                Also away in {employee && employee.department}
+                {clash.limit > 0 ? ` (limit ${clash.limit})` : ''}
+              </div>
+              {clash.away.slice(0, 6).map((a, i) => (
+                <div key={i} className="to-small">
+                  {a.name} · <span className="to-muted">{fmtDate(a.start)}{a.end !== a.start ? ' – ' + fmtDate(a.end) : ''}{a.status !== 'Approved' ? ' (pending)' : ''}</span>
+                </div>
+              ))}
+            </div>
+          )}
           {v.errors.map((x) => (
             <MessageBar key={x} messageBarType={MessageBarType.blocked}>
               {x}

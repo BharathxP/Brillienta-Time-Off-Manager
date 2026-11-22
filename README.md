@@ -23,6 +23,13 @@ Fluent UI 8). All data stays in SharePoint lists on your own site. Same design s
 | **Reports** | Usage by type, department and month, approval times, balance and request **CSV exports**, **Power BI** connection details |
 | **Integrations** | Emails through a **Power Automate** flow (no Mail.Send needed); Events outbox list for flows; **webhook** (JSON POST) for **API connectivity**; SharePoint REST / Microsoft Graph endpoints |
 | **Branding** | App name, brand and accent colour, **logo** upload, home headline |
+| **Editing** | Change a pending request (dates, type, length, reason): the approval starts again and the history shows what changed |
+| **Partial & sandwich** | Multi-day leave can start in the afternoon and/or end at midday; per type **sandwich rule** (weekends / holidays between leave days count) |
+| **Blackouts & staffing** | **Blackout periods** (block or warn, by department and leave type); **minimum staffing** limits per department (% or people, warn or block); approvers see the team cover on every request |
+| **Managers** | **My team**: direct and indirect reports' balances, next leave, waiting approvals, Excel export, request on their behalf |
+| **Balance admin** | **Opening balances** CSV import (migration), **bulk adjustments** by department / grade, **leaving date** (prorated entitlement, no leave after it), remove sample data |
+| **Reports+** | **Excel (.xlsx)** exports, **leave register** for any date range (payroll), **Bradford factor**, **leave liability** |
+| **Microsoft 365** | **Outlook automatic replies** during leave; approved leave on a **Microsoft 365 group / Teams channel calendar**; downloadable **Power Automate flow package** for emails |
 | **Licensing** | 14-day trial; signed licence keys per tenant with a user count; pricing calculator (base users, **$1 add-on per 50 users**, **additional users at ₹100/user**), free updates and unlimited support |
 
 ## Build
@@ -41,14 +48,18 @@ Preview roles: `?role=admin` (default), `?role=hr`, `?role=employee`; `?fresh=1`
 ## Install
 
 1. Upload `Brillienta-Time-Off-Manager.sppkg` to the tenant (or site) app catalog and deploy it.
-2. SharePoint admin center › **Advanced › API access**: approve `User.Read.All` (employee import) and
-   `Calendars.ReadWrite` (Outlook calendar). Both are optional.
+2. SharePoint admin center › **Advanced › API access**: approve what you want to use (all optional) —
+   `User.Read.All` (employee import), `Calendars.ReadWrite` (each person's Outlook calendar),
+   `MailboxSettings.ReadWrite` (automatic replies), `Group.Read.All` + `Group.ReadWrite.All` (Teams channel calendar).
 3. Add the **Brillienta Time Off Manager** web part to a page (full-width section or a single-part app page). A site
    owner opens it once: the setup wizard creates the lists and imports people (or a sample organisation).
 4. Optional: add it to Teams (*Sync to Teams* in the app catalog) as a tab or personal app; the **Team Leave
    Calendar** web part shows only the calendar.
-5. Admin › Notifications: create the email flow (3 steps, shown in the app). Admin › Access: apply the recommended
-   list permissions.
+5. Admin › Notifications: **Download the flow package** and import it in Power Automate (My flows › Import ›
+   Import package (legacy)), or build the 3-step flow by hand. Admin › Access: apply the recommended list permissions.
+
+**Upgrading from 1.0:** deploy the new package; the next time a site owner opens the app, the new columns
+(schema version 2) are added automatically. Until then everyone can keep working — the new fields are simply not saved.
 
 ## Data (SharePoint lists, prefix `TO_`)
 

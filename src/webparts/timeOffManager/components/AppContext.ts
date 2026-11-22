@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { IConfig, ICurrentUser, IEmployee, ILeaveTemplate, Role } from '../models/types';
+import { IConfig, ICurrentUser, IEmployee, ILeaveRequest, ILeaveTemplate, Role } from '../models/types';
 import { LeaveService } from '../services/LeaveService';
 import { SettingsStore } from '../services/SettingsStore';
 import { SPClient } from '../services/SPClient';
@@ -28,6 +28,8 @@ export interface IRequestFormOptions {
   template?: ILeaveTemplate;
   start?: string;
   leaveType?: string;
+  /** Change this pending request instead of creating a new one. */
+  edit?: ILeaveRequest;
 }
 
 export interface IAppContext {

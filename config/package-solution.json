@@ -3,7 +3,7 @@
   "solution": {
     "name": "Brillienta-Time-Off-Manager",
     "id": "3a9d6f12-8e4b-4c71-b2f5-6d1e0a7c9b48",
-    "version": "1.0.0.0",
+    "version": "1.1.0.0",
     "iconPath": "images/app-icon.png",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": true,
@@ -20,21 +20,42 @@
         "default": "Leave and time-off management for SharePoint and Microsoft Teams."
       },
       "longDescription": {
-        "default": "Brillienta Time Off Manager runs inside SharePoint Online and Microsoft Teams and keeps all data in SharePoint lists on your own site. It includes 30 leave types; fixed, accrual, grade-based and tenure-based entitlements with proration and carry-forward; comp off (in lieu) with expiry; full-day, half-day and hourly (two-hour) leave; non-working days and holiday calendars; recurring and bi-weekly leave; leave templates; multilevel approval workflows with delegation, reminders, escalation, auto-approval and approval on behalf of the manager; submitting on behalf of employees; cancellation with approval; a team calendar with Outlook/Teams calendar sync; reports and exports; Power Automate events, a webhook, the REST API and Power BI. Custom theme, brand and logo. Includes a 14-day free trial. Microsoft Graph permissions: User.Read.All (import employees) and Calendars.ReadWrite (add approved leave to the person's own calendar), both optional."
+        "default": "Brillienta Time Off Manager runs inside SharePoint Online and Microsoft Teams and keeps all data in SharePoint lists on your own site. It includes 30 leave types; fixed, accrual, grade-based and tenure-based entitlements with proration and carry-forward; comp off (in lieu) with expiry; full-day, half-day and hourly (two-hour) leave; non-working days and holiday calendars; recurring and bi-weekly leave; leave templates; multilevel approval workflows with delegation, reminders, escalation, auto-approval and approval on behalf of the manager; submitting on behalf of employees; cancellation with approval; a team calendar with Outlook/Teams calendar sync; reports and exports; Power Automate events, a webhook, the REST API and Power BI. Custom theme, brand and logo. Includes a 14-day free trial. Also: editing pending requests, partial first/last days, the sandwich rule, blackout periods, minimum staffing, a My team view for managers, opening-balance import, bulk adjustments, leaving dates, Excel exports, a leave register, Bradford factor and leave liability reports, and an importable Power Automate flow. Microsoft Graph permissions, all optional: User.Read.All (import employees), Calendars.ReadWrite (the person's own calendar), MailboxSettings.ReadWrite (Outlook automatic replies), Group.Read.All and Group.ReadWrite.All (a Teams channel calendar)."
       },
-      "categories": ["Legal + HR", "Productivity"]
+      "categories": [
+        "Legal + HR",
+        "Productivity"
+      ]
     },
     "features": [
       {
         "title": "Brillienta Time Off Manager",
         "description": "Activates the Time Off Manager web parts.",
         "id": "9e2b47c3-1f6a-4d8e-a5c0-7b3f12d4e690",
-        "version": "1.0.0.0"
+        "version": "1.1.0.0"
       }
     ],
     "webApiPermissionRequests": [
-      { "resource": "Microsoft Graph", "scope": "User.Read.All" },
-      { "resource": "Microsoft Graph", "scope": "Calendars.ReadWrite" }
+      {
+        "resource": "Microsoft Graph",
+        "scope": "User.Read.All"
+      },
+      {
+        "resource": "Microsoft Graph",
+        "scope": "Calendars.ReadWrite"
+      },
+      {
+        "resource": "Microsoft Graph",
+        "scope": "MailboxSettings.ReadWrite"
+      },
+      {
+        "resource": "Microsoft Graph",
+        "scope": "Group.Read.All"
+      },
+      {
+        "resource": "Microsoft Graph",
+        "scope": "Group.ReadWrite.All"
+      }
     ]
   },
   "paths": {
