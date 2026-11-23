@@ -8,9 +8,11 @@ import { initializeIcons } from '@fluentui/react';
 
 import * as strings from 'TimeOffManagerWebPartStrings';
 import App, { IAppProps } from './components/App';
+import { LEGACY_LIST_PREFIX, LIST_PREFIX } from './schema/schema';
+import { SPHttpClient } from '@microsoft/sp-http';
 
 export interface ITimeOffManagerWebPartProps {
-  /** Fixed at "TO_" by the manifest: the lists are found through it. */
+  /** Fixed at "BrillTM_" by the manifest: the lists are found through it. */
   listPrefix: string;
   /** What the web part shows: the whole app, the team calendar or my leave. */
   view?: 'app' | 'calendar' | 'my';
@@ -18,9 +20,14 @@ export interface ITimeOffManagerWebPartProps {
 
 let iconsReady = false;
 
+const clean = (p: string | undefined): string => (p || '').replace(/[^A-Za-z0-9_]/g, '');
+
 export default class TimeOffManagerWebPart extends BaseClientSideWebPart<ITimeOffManagerWebPartProps> {
+  private _prefix: string = LIST_PREFIX;
+
   protected async onInit(): Promise<void> {
     await super.onInit();
+    this._prefix = await this._resolvePrefix();
     if (!iconsReady) {
       initializeIcons(undefined, { disableWarnings: true });
       iconsReady = true;
@@ -40,12 +47,33 @@ export default class TimeOffManagerWebPart extends BaseClientSideWebPart<ITimeOf
         manageWeb: perms.hasPermission(SPPermission.manageWeb) || perms.hasPermission(SPPermission.managePermissions)
       },
       tenantId: aad && aad.tenantId ? aad.tenantId.toString() : undefined,
-      prefix: (this.properties.listPrefix || 'TO_').replace(/[^A-Za-z0-9_]/g, '') || 'TO_',
+      prefix: this._prefix,
       appVersion: this.manifest.version,
       graphFactory: ctx.msGraphClientFactory,
       host: { inTeams: !!(ctx.sdks && ctx.sdks.microsoftTeams), view: this.properties.view || 'app' }
     };
     ReactDom.render(React.createElement(App, props), this.domElement);
+  }
+
+  /**
+   * The lists' prefix: BrillTM_ (the page's own setting when it names another). A site set up before 1.2 has TO_ lists
+   * and no BrillTM_ ones: it keeps using them.
+   */
+  private async _resolvePrefix(): Promise<string> {
+    const set = clean(this.properties.listPrefix);
+    if (set && set !== LIST_PREFIX && set !== LEGACY_LIST_PREFIX) return set;
+    const exists = async (prefix: string): Promise<boolean> => {
+      try {
+        const url = `${this.context.pageContext.web.absoluteUrl}/_api/web/lists/getbytitle('${prefix}Settings')?$select=Id`;
+        const res = await this.context.spHttpClient.get(url, SPHttpClient.configurations.v1);
+        return res.ok;
+      } catch {
+        return false;
+      }
+    };
+    if (await exists(LIST_PREFIX)) return LIST_PREFIX;
+    if (await exists(LEGACY_LIST_PREFIX)) return LEGACY_LIST_PREFIX;
+    return LIST_PREFIX;
   }
 
   protected onDispose(): void {

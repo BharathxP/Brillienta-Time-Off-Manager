@@ -4,6 +4,11 @@
 /** 2: Requests.PartialDays, AutoReply, GroupEventId; Employees.LeavingDate. */
 export const SCHEMA_VERSION = 2;
 
+/** Brand prefix of every list the app creates: BrillTM_Requests, BrillTM_Employees, ... */
+export const LIST_PREFIX = 'BrillTM_';
+/** Prefix used before 1.2 (sites set up then keep working). */
+export const LEGACY_LIST_PREFIX = 'TO_';
+
 export type FieldType = 'Text' | 'Note' | 'Number' | 'Boolean' | 'DateTime' | 'Choice';
 
 export interface IFieldDef {

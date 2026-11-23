@@ -26,7 +26,7 @@ ReactDom.render(
     siteTitle: 'Human Resources',
     permissions: { manageLists: owner, manageWeb: owner },
     tenantId: '6f1c2a9e-0b7d-4c55-9e3a-2d8f41b07c13',
-    prefix: 'TO_',
+    prefix: 'BrillTM_',
     appVersion: APP_VERSION,
     host: { inTeams: false, view: 'app' }
   }),

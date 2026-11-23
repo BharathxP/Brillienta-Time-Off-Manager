@@ -16,7 +16,7 @@ export interface ICurrentUser {
   canManageWeb: boolean;
 }
 
-/** A person who takes time off (TO_Employees). Imported from Microsoft Entra ID, a CSV file or entered by HR. */
+/** A person who takes time off (BrillTM_Employees). Imported from Microsoft Entra ID, a CSV file or entered by HR. */
 export interface IEmployee {
   id?: number;
   email: string;

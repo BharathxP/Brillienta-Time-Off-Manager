@@ -14,7 +14,7 @@ function iconFor(title: string): string {
   return 'Inbox';
 }
 
-/** Top-bar bell: the signed-in person's notifications (TO_Notifications), refreshed every minute. */
+/** Top-bar bell: the signed-in person's notifications (BrillTM_Notifications), refreshed every minute. */
 export function NotificationBell(): JSX.Element | null {
   const { svc, me, navigate, config, notificationsTick } = useApp();
   const [items, setItems] = React.useState<INotification[]>([]);

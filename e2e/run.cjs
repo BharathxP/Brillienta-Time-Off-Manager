@@ -74,7 +74,7 @@ async function state() {
   return emu.getState();
 }
 function items(st, list) {
-  return st.lists['TO_' + list] ? st.lists['TO_' + list].items : [];
+  return st.lists['BrillTM_' + list] ? st.lists['BrillTM_' + list].items : [];
 }
 function config(st) {
   const row = items(st, 'Settings').filter((r) => r.Title === 'Config')[0];
@@ -219,8 +219,8 @@ async function main() {
     await p.waitForSelector('.to-app', { timeout: 30000 });
     const st = await state();
     const lists = Object.keys(st.lists).sort();
-    assert.deepStrictEqual(lists, ['TO_Audit', 'TO_Delegations', 'TO_EmailQueue', 'TO_Employees', 'TO_Events', 'TO_Ledger', 'TO_Notifications', 'TO_Requests', 'TO_Settings']);
-    assert.ok(st.lists.TO_Requests.fields.PartialDays && st.lists.TO_Employees.fields.LeavingDate, 'schema v2 columns');
+    assert.deepStrictEqual(lists, ['BrillTM_Audit', 'BrillTM_Delegations', 'BrillTM_EmailQueue', 'BrillTM_Employees', 'BrillTM_Events', 'BrillTM_Ledger', 'BrillTM_Notifications', 'BrillTM_Requests', 'BrillTM_Settings']);
+    assert.ok(st.lists.BrillTM_Requests.fields.PartialDays && st.lists.BrillTM_Employees.fields.LeavingDate, 'schema v2 columns');
     assert.strictEqual(items(st, 'Settings').filter((r) => r.Title === 'SchemaVersion')[0].SettingValue, '2');
     const cfg = config(st);
     assert.strictEqual(cfg.leaveTypes.length, 30);
@@ -502,7 +502,7 @@ async function main() {
   await scenario('Blackout period blocks employees (HR only gets a warning)', async () => {
     const start = addDays(MON, 21);
     await seedLists((lists) => {
-      const row = lists.TO_Settings.items.filter((r) => r.Title === 'Config')[0];
+      const row = lists.BrillTM_Settings.items.filter((r) => r.Title === 'Config')[0];
       const cfg = JSON.parse(row.SettingValue);
       cfg.blackouts = [{ key: 'b1', name: 'Year-end close', from: start, to: addDays(start, 4), departments: ['Engineering'], leaveTypes: [], mode: 'block' }];
       row.SettingValue = JSON.stringify(cfg);
@@ -624,11 +624,11 @@ async function main() {
     await setDate(p0, 'To', addDays(MON, 15));
     await submit(p0);
     await seedLists((lists) => {
-      const r = lists.TO_Requests.items.filter((x) => x.EmployeeEmail === ria && x.StartDate === addDays(MON, 15))[0];
+      const r = lists.BrillTM_Requests.items.filter((x) => x.EmployeeEmail === ria && x.StartDate === addDays(MON, 15))[0];
       const steps = JSON.parse(r.Steps);
       steps[0].startedAt = new Date(Date.now() - 30 * 3600000).toISOString();
       r.Steps = JSON.stringify(steps);
-      lists.TO_Settings.items.filter((s) => s.Title === 'LastReminderRun').forEach((s) => (s.SettingValue = new Date(Date.now() - 2 * 3600000).toISOString()));
+      lists.BrillTM_Settings.items.filter((s) => s.Title === 'LastReminderRun').forEach((s) => (s.SettingValue = new Date(Date.now() - 2 * 3600000).toISOString()));
     });
     sessions[eli] && (await sessions[eli].close(), delete sessions[eli]);
     await open(eli, 'home');
@@ -650,11 +650,11 @@ async function main() {
 
   await scenario('Upgrade: a 1.0 site keeps working for employees, and a site owner visit adds the new columns', async () => {
     await seedLists((lists) => {
-      delete lists.TO_Requests.fields.PartialDays;
-      delete lists.TO_Requests.fields.AutoReply;
-      delete lists.TO_Requests.fields.GroupEventId;
-      delete lists.TO_Employees.fields.LeavingDate;
-      lists.TO_Settings.items.filter((s) => s.Title === 'SchemaVersion')[0].SettingValue = '1';
+      delete lists.BrillTM_Requests.fields.PartialDays;
+      delete lists.BrillTM_Requests.fields.AutoReply;
+      delete lists.BrillTM_Requests.fields.GroupEventId;
+      delete lists.BrillTM_Employees.fields.LeavingDate;
+      lists.BrillTM_Settings.items.filter((s) => s.Title === 'SchemaVersion')[0].SettingValue = '1';
     });
     for (const k of Object.keys(sessions)) {
       await sessions[k].context().close();
@@ -667,18 +667,18 @@ async function main() {
     await setDate(p, 'To', addDays(MON, 16));
     assert.match(await submit(p), /Approved straight away|Sent to/);
     let st = await state();
-    assert.ok(!st.lists.TO_Requests.fields.PartialDays, 'employee did not change the schema');
+    assert.ok(!st.lists.BrillTM_Requests.fields.PartialDays, 'employee did not change the schema');
     await open(admin, 'home');
     await new Promise((r) => setTimeout(r, 1500));
     st = await state();
-    assert.ok(st.lists.TO_Requests.fields.PartialDays && st.lists.TO_Employees.fields.LeavingDate, 'columns added');
+    assert.ok(st.lists.BrillTM_Requests.fields.PartialDays && st.lists.BrillTM_Employees.fields.LeavingDate, 'columns added');
     assert.strictEqual(items(st, 'Settings').filter((s) => s.Title === 'SchemaVersion')[0].SettingValue, '2');
   });
 
   await scenario('Licence: when the trial has ended the app locks (data kept) and shows the licence page to admins', async () => {
     await seedLists((lists) => {
-      lists.TO_Settings.created = new Date(Date.now() - 30 * 86400000).toISOString();
-      lists.TO_Settings.items.filter((s) => s.Title === 'InstalledAt')[0].SettingValue = new Date(Date.now() - 30 * 86400000).toISOString();
+      lists.BrillTM_Settings.created = new Date(Date.now() - 30 * 86400000).toISOString();
+      lists.BrillTM_Settings.items.filter((s) => s.Title === 'InstalledAt')[0].SettingValue = new Date(Date.now() - 30 * 86400000).toISOString();
     });
     for (const k of Object.keys(sessions)) {
       await sessions[k].context().close();
@@ -690,8 +690,8 @@ async function main() {
     const a = await open(admin, 'home');
     assert.match(await a.textContent('.to-locked'), /Activate a licence key/);
     await seedLists((lists) => {
-      lists.TO_Settings.created = new Date().toISOString();
-      lists.TO_Settings.items.filter((s) => s.Title === 'InstalledAt')[0].SettingValue = new Date().toISOString();
+      lists.BrillTM_Settings.created = new Date().toISOString();
+      lists.BrillTM_Settings.items.filter((s) => s.Title === 'InstalledAt')[0].SettingValue = new Date().toISOString();
     });
   });
 

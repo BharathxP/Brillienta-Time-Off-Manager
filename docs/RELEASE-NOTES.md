@@ -1,5 +1,10 @@
 # Release notes
 
+## 1.2.0
+
+- Lists carry the Brillienta brand prefix: `BrillTM_Requests`, `BrillTM_Employees`, `BrillTM_Settings`, ... (was `TO_`).
+  Sites set up with an earlier version keep their `TO_` lists and keep working; new sites get `BrillTM_` lists.
+
 ## 1.1.1 — fixes from end-to-end testing
 
 - Open pages refresh their data when the tab regains focus and every 2 minutes (approvers saw stale lists).

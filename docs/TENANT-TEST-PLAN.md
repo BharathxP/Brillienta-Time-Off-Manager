@@ -11,7 +11,7 @@ Use a test site and 4 test accounts: **Admin** (site owner), **Manager**, **Empl
 | 1.1 | Upload `Brillienta-Time-Off-Manager.sppkg` to the app catalog, *Enable app* (tick "make available to all sites") | Deployed, no errors |
 | 1.2 | SharePoint admin center › Advanced › API access: approve User.Read.All, Calendars.ReadWrite, MailboxSettings.ReadWrite (and Group.Read.All / Group.ReadWrite.All to test the channel calendar) | Approved |
 | 1.3 | Admin: new page on the test site, add **Brillienta Time Off Manager**, publish | Setup wizard appears |
-| 1.4 | Setup › Import from Microsoft 365, tick "Make me HR" | 9 `TO_` lists in Site contents (hidden ones via *Site contents › Settings*), employees imported with managers |
+| 1.4 | Setup › Import from Microsoft 365, tick "Make me HR" | 9 `BrillTM_` lists in Site contents (hidden ones via *Site contents › Settings*), employees imported with managers |
 | 1.5 | Employees & balances › Edit the Employee: grade, start date, manager | Saved; balances change with grade / tenure |
 
 ## 2. Request and approve (two browsers, or one normal + one InPrivate window)
@@ -48,6 +48,6 @@ Use a test site and 4 test accounts: **Admin** (site owner), **Manager**, **Empl
 
 | # | Step | Expected |
 | --- | --- | --- |
-| 4.1 | Admin › Notifications › Download the flow package; Power Automate › Import package (legacy); choose connections; turn on | New requests send emails; `TO_EmailQueue` rows turn Sent |
-| 4.2 | Power BI Desktop › SharePoint Online list › site URL › `TO_Requests` | Data loads |
+| 4.1 | Admin › Notifications › Download the flow package; Power Automate › Import package (legacy); choose connections; turn on | New requests send emails; `BrillTM_EmailQueue` rows turn Sent |
+| 4.2 | Power BI Desktop › SharePoint Online list › site URL › `BrillTM_Requests` | Data loads |
 | 4.3 | Admin › Power Automate & API › webhook = a "When an HTTP request is received" flow URL | Each change runs the flow |

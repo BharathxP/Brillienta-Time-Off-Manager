@@ -61,19 +61,19 @@ Preview roles: `?role=admin` (default), `?role=hr`, `?role=employee`; `?fresh=1`
 **Upgrading from 1.0:** deploy the new package; the next time a site owner opens the app, the new columns
 (schema version 2) are added automatically. Until then everyone can keep working — the new fields are simply not saved.
 
-## Data (SharePoint lists, prefix `TO_`)
+## Data (SharePoint lists, prefix `BrillTM_`)
 
 | List | Holds |
 | --- | --- |
-| `TO_Settings` | Configuration JSON (leave types, workflows, calendars, templates, roles), licence key, logo |
-| `TO_Employees` | Email, manager, department, grade, start date, work calendar, gender, active |
-| `TO_Requests` | Leave and comp-off requests: dates, unit, hours, days, status, approval steps (JSON), history (JSON), `CurrentApprovers` |
-| `TO_Ledger` | Adjustments, carry-forward, comp-off credits (with expiry), grants |
-| `TO_Delegations` | Approver → delegate, from / to |
-| `TO_Notifications` | The bell |
-| `TO_EmailQueue` | Emails for the Power Automate flow |
-| `TO_Events` | Outbox of request events for flows and other systems |
-| `TO_Audit` | Settings, balance and on-behalf changes |
+| `BrillTM_Settings` | Configuration JSON (leave types, workflows, calendars, templates, roles), licence key, logo |
+| `BrillTM_Employees` | Email, manager, department, grade, start date, work calendar, gender, active |
+| `BrillTM_Requests` | Leave and comp-off requests: dates, unit, hours, days, status, approval steps (JSON), history (JSON), `CurrentApprovers` |
+| `BrillTM_Ledger` | Adjustments, carry-forward, comp-off credits (with expiry), grants |
+| `BrillTM_Delegations` | Approver → delegate, from / to |
+| `BrillTM_Notifications` | The bell |
+| `BrillTM_EmailQueue` | Emails for the Power Automate flow |
+| `BrillTM_Events` | Outbox of request events for flows and other systems |
+| `BrillTM_Audit` | Settings, balance and on-behalf changes |
 
 Balances are never stored: they are computed from the policy, the ledger and the requests
 (`services/balances.ts`), so policy changes apply at once and every number can be explained.

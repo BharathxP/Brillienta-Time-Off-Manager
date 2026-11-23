@@ -69,7 +69,7 @@ test('Bradford factor: spells squared times days', () => {
 test('Excel workbook and Power Automate flow package are valid zips', () => {
   const x = xlsxWorkbook([{ name: 'Leave', columns: ['A', 'B'], rows: [['x', 1]] }]);
   assert.strictEqual(String.fromCharCode(x[0], x[1]), 'PK');
-  const z = flowPackageZip({ siteUrl: 'https://contoso.sharepoint.com/sites/hr', listId: '00000000-0000-0000-0000-000000000000', listTitle: 'TO_EmailQueue', displayName: 'Send', sharedMailbox: '', allowedDomains: [], useReplyTo: false });
+  const z = flowPackageZip({ siteUrl: 'https://contoso.sharepoint.com/sites/hr', listId: '00000000-0000-0000-0000-000000000000', listTitle: 'BrillTM_EmailQueue', displayName: 'Send', sharedMailbox: '', allowedDomains: [], useReplyTo: false });
   assert.strictEqual(String.fromCharCode(z[0], z[1]), 'PK');
 });
 

@@ -3,7 +3,7 @@
   "solution": {
     "name": "Brillienta-Time-Off-Manager",
     "id": "3a9d6f12-8e4b-4c71-b2f5-6d1e0a7c9b48",
-    "version": "1.1.1.0",
+    "version": "1.2.0.0",
     "iconPath": "images/app-icon.png",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": true,
@@ -32,7 +32,7 @@
         "title": "Brillienta Time Off Manager",
         "description": "Activates the Time Off Manager web parts.",
         "id": "9e2b47c3-1f6a-4d8e-a5c0-7b3f12d4e690",
-        "version": "1.1.1.0"
+        "version": "1.2.0.0"
       }
     ],
     "webApiPermissionRequests": [
