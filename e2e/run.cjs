@@ -695,6 +695,74 @@ async function main() {
     });
   });
 
+  await scenario('List names: every list and every write uses the BrillTM_ prefix', async () => {
+    const st = await state();
+    const names = Object.keys(st.lists);
+    assert.ok(names.length === 9 && names.every((n) => n.indexOf('BrillTM_') === 0), names.join(', '));
+    const writes = st.log.filter((l) => / (POST|MERGE|DELETE) /.test(l) && /getbytitle\('/.test(l));
+    const elsewhere = writes.filter((l) => !/getbytitle\('BrillTM_/.test(l));
+    assert.ok(writes.length > 100, `${writes.length} writes`);
+    assert.deepStrictEqual(elsewhere, []);
+  });
+
+  await scenario('Admin screens show the BrillTM_ list names (Power Automate, API, Power BI, flow package)', async () => {
+    const p = await open(admin, 'admin/integrations');
+    const integ = await p.locator('.to-admin').innerText();
+    const fields = await p.$$eval('.to-admin input', (els) => els.map((e) => e.value).join(' '));
+    assert.match(integ + fields, /BrillTM_Events/);
+    assert.match(fields, /getbytitle\('BrillTM_Requests'\)/);
+    assert.ok(!/TO_/.test((integ + fields).replace(/BrillTM_/g, '')), 'no old prefix');
+    await go(p, 'admin/notifications');
+    assert.match(await p.locator('.to-admin').innerText(), /BrillTM_EmailQueue/);
+    const [dl] = await Promise.all([p.waitForEvent('download'), p.click('button:has-text("Download the flow package")')]);
+    const file = path.join(shots, 'flow.zip');
+    await dl.saveAs(file);
+    const zip = fs.readFileSync(file).toString('latin1');
+    assert.strictEqual(zip.substring(0, 2), 'PK');
+    assert.ok(zip.indexOf('BrillTM_EmailQueue') >= 0, 'flow package targets BrillTM_EmailQueue');
+    assert.ok(zip.indexOf('TO_EmailQueue') < 0, 'no old list name in the flow');
+    await go(p, 'reports');
+    const bi = await p.$$eval('input[readonly]', (els) => els.map((e) => e.value).join(' '));
+    assert.match(bi, /BrillTM_Requests/);
+    assert.match(bi, /BrillTM_Ledger/);
+  });
+
+  await scenario('A site set up before 1.2 (TO_ lists) keeps working and gets no BrillTM_ lists', async () => {
+    const backup = {};
+    await seedLists((lists) => {
+      Object.keys(lists).forEach((k) => {
+        backup[k] = lists[k];
+        const old = 'TO_' + k.substring('BrillTM_'.length);
+        lists[old] = { ...lists[k], title: old };
+        delete lists[k];
+      });
+    });
+    for (const k of Object.keys(sessions)) {
+      await sessions[k].context().close();
+      delete sessions[k];
+    }
+    const before = (await state()).lists.TO_Requests.items.length;
+    const p = await open(eli, 'home');
+    assert.strictEqual(await p.evaluate(() => window.__toPrefix), 'TO_');
+    await openForm(p);
+    await pickType(p, 'Casual leave');
+    await setDate(p, 'From', addDays(MON, 29));
+    await setDate(p, 'To', addDays(MON, 29));
+    await submit(p);
+    await open(admin, 'admin/access');
+    let st = await state();
+    assert.strictEqual(st.lists.TO_Requests.items.length, before + 1);
+    assert.ok(!Object.keys(st.lists).some((n) => n.indexOf('BrillTM_') === 0), Object.keys(st.lists).join(', '));
+    assert.match(await (await as(admin)).locator('.to-admin').innerText(), /TO_Requests/);
+    // Restore the BrillTM_ site; when both exist, BrillTM_ wins.
+    await seedLists((lists) => Object.keys(backup).forEach((k) => (lists[k] = backup[k])));
+    const q = await open(eli, 'home');
+    assert.strictEqual(await q.evaluate(() => window.__toPrefix), 'BrillTM_');
+    await seedLists((lists) => Object.keys(lists).filter((k) => k.indexOf('TO_') === 0).forEach((k) => delete lists[k]));
+    st = await state();
+    assert.ok(Object.keys(st.lists).every((n) => n.indexOf('BrillTM_') === 0));
+  });
+
   await scenario('Sample organisation can be installed and removed again', async () => {
     await fetch(`${BASE}/__reset`, { method: 'POST' });
     for (const k of Object.keys(sessions)) {

@@ -8,7 +8,8 @@ import { initializeIcons } from '@fluentui/react';
 
 import * as strings from 'TimeOffManagerWebPartStrings';
 import App, { IAppProps } from './components/App';
-import { LEGACY_LIST_PREFIX, LIST_PREFIX } from './schema/schema';
+import { LIST_PREFIX } from './schema/schema';
+import { resolveListPrefix, settingsListProbe } from './services/listPrefix';
 import { SPHttpClient } from '@microsoft/sp-http';
 
 export interface ITimeOffManagerWebPartProps {
@@ -19,8 +20,6 @@ export interface ITimeOffManagerWebPartProps {
 }
 
 let iconsReady = false;
-
-const clean = (p: string | undefined): string => (p || '').replace(/[^A-Za-z0-9_]/g, '');
 
 export default class TimeOffManagerWebPart extends BaseClientSideWebPart<ITimeOffManagerWebPartProps> {
   private _prefix: string = LIST_PREFIX;
@@ -55,25 +54,10 @@ export default class TimeOffManagerWebPart extends BaseClientSideWebPart<ITimeOf
     ReactDom.render(React.createElement(App, props), this.domElement);
   }
 
-  /**
-   * The lists' prefix: BrillTM_ (the page's own setting when it names another). A site set up before 1.2 has TO_ lists
-   * and no BrillTM_ ones: it keeps using them.
-   */
-  private async _resolvePrefix(): Promise<string> {
-    const set = clean(this.properties.listPrefix);
-    if (set && set !== LIST_PREFIX && set !== LEGACY_LIST_PREFIX) return set;
-    const exists = async (prefix: string): Promise<boolean> => {
-      try {
-        const url = `${this.context.pageContext.web.absoluteUrl}/_api/web/lists/getbytitle('${prefix}Settings')?$select=Id`;
-        const res = await this.context.spHttpClient.get(url, SPHttpClient.configurations.v1);
-        return res.ok;
-      } catch {
-        return false;
-      }
-    };
-    if (await exists(LIST_PREFIX)) return LIST_PREFIX;
-    if (await exists(LEGACY_LIST_PREFIX)) return LEGACY_LIST_PREFIX;
-    return LIST_PREFIX;
+  /** BrillTM_, or the TO_ lists of a site set up before 1.2 (services/listPrefix.ts). */
+  private _resolvePrefix(): Promise<string> {
+    const http = this.context.spHttpClient;
+    return resolveListPrefix(this.properties.listPrefix, settingsListProbe(this.context.pageContext.web.absoluteUrl, (url) => http.get(url, SPHttpClient.configurations.v1)));
   }
 
   protected onDispose(): void {

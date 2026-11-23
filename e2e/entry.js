@@ -5,6 +5,7 @@ import * as ReactDom from 'react-dom';
 import { initializeIcons } from '@fluentui/react';
 import App from '../lib/webparts/timeOffManager/components/App';
 import { version as APP_VERSION } from '../package.json';
+import { resolveListPrefix, settingsListProbe } from '../lib/webparts/timeOffManager/services/listPrefix';
 
 const params = new URLSearchParams(window.location.search);
 const user = params.get('user') || 'admin@contoso.com';
@@ -19,16 +20,20 @@ const call = (method) => (url, _config, options) => {
 const http = { get: call('GET'), post: call('POST') };
 
 initializeIcons(undefined, { disableWarnings: true });
-ReactDom.render(
-  React.createElement(App, {
-    http,
-    webUrl: WEB,
-    siteTitle: 'Human Resources',
-    permissions: { manageLists: owner, manageWeb: owner },
-    tenantId: '6f1c2a9e-0b7d-4c55-9e3a-2d8f41b07c13',
-    prefix: 'BrillTM_',
-    appVersion: APP_VERSION,
-    host: { inTeams: false, view: 'app' }
-  }),
-  document.getElementById('root')
-);
+// The same prefix choice as the web part (?prefix= stands in for the page's saved listPrefix setting).
+resolveListPrefix(params.get('prefix') || 'BrillTM_', settingsListProbe(WEB, (url) => http.get(url))).then((prefix) => {
+  window.__toPrefix = prefix;
+  ReactDom.render(
+    React.createElement(App, {
+      http,
+      webUrl: WEB,
+      siteTitle: 'Human Resources',
+      permissions: { manageLists: owner, manageWeb: owner },
+      tenantId: '6f1c2a9e-0b7d-4c55-9e3a-2d8f41b07c13',
+      prefix,
+      appVersion: APP_VERSION,
+      host: { inTeams: false, view: 'app' }
+    }),
+    document.getElementById('root')
+  );
+});

@@ -81,3 +81,14 @@ test('book ahead: accrual types may use what accrues later in the leave year', (
   assert.deepStrictEqual(bal.bookable(off, b), { available: 0, ahead: 0 });
   assert.strictEqual(bal.bookable(type('casual'), { ...b, available: 3 }).available, 3);
 });
+
+test('list prefix: BrillTM_ on new sites, earlier TO_ sites keep their lists, a custom prefix wins', async () => {
+  const { resolveListPrefix, cleanPrefix } = lib('services/listPrefix');
+  const site = (...lists) => async (p) => lists.indexOf(p + 'Settings') >= 0;
+  assert.strictEqual(await resolveListPrefix('BrillTM_', site()), 'BrillTM_');
+  assert.strictEqual(await resolveListPrefix('BrillTM_', site('TO_Settings')), 'TO_');
+  assert.strictEqual(await resolveListPrefix('TO_', site('TO_Settings', 'BrillTM_Settings')), 'BrillTM_');
+  assert.strictEqual(await resolveListPrefix(undefined, site('TO_Settings')), 'TO_');
+  assert.strictEqual(await resolveListPrefix('Acme HR_', site('BrillTM_Settings')), 'AcmeHR_');
+  assert.strictEqual(cleanPrefix("x'; drop"), 'xdrop');
+});
