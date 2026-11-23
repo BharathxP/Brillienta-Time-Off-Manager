@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Brillienta Time Off Manager licence tool (vendor only; never shipped in the .sppkg).
 //
-// Uses the same Brillienta signing key pair as the Employee Directory (tools/license in the repository root):
+// Uses the same Brillienta signing key pair as Brillienta Employee Directory (its tools/license/license.cjs keygen):
 // the public half is src/webparts/timeOffManager/services/licensing/publicKey.ts.
 //
 //   node tools/license/license.cjs issue --tenant <tenant id> --customer "Contoso Ltd" --users 120
@@ -16,6 +16,7 @@ const os = require('os');
 const path = require('path');
 
 const PUBLIC_KEY_FILE = path.join(__dirname, '..', '..', 'src', 'webparts', 'timeOffManager', 'services', 'licensing', 'publicKey.ts');
+// The shared Brillienta signing key (pass --key to use another location).
 const DEFAULT_KEY = path.join(os.homedir(), '.employee-directory-licensing', 'private-key.pem');
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const b64url = (buf) => Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');

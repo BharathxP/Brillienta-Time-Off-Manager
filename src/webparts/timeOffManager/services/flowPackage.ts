@@ -163,7 +163,7 @@ export function flowPackageFiles(o: IFlowOptions, now: Date = new Date(), random
   });
   const manifest = {
     schema: '1.0',
-    details: { displayName: o.displayName, description, createdTime: now.toISOString(), packageTelemetryId: newGuid(random), creator: 'Employee Directory', sourceEnvironment: '' },
+    details: { displayName: o.displayName, description, createdTime: now.toISOString(), packageTelemetryId: newGuid(random), creator: 'Brillienta Time Off Manager', sourceEnvironment: '' },
     resources: {
       [res.flow]: {
         id: `/providers/Microsoft.Flow/flows/${flowId}`,

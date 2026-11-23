@@ -2,7 +2,7 @@
 
 Leave and time-off management for **SharePoint Online and Microsoft Teams**, built with SPFx 1.23 (React 17,
 Fluent UI 8). All data stays in SharePoint lists on your own site. Same design system and branding as
-[Brillienta Employee Directory](../README.md): navy-and-lime workspace, Manrope / DM Sans, the Brillienta green logo tile.
+[Brillienta Employee Directory](https://github.com/BharathxP/BrillientaEmployeeDirectory): navy-and-lime workspace, Manrope / DM Sans, the Brillienta green logo tile.
 
 ## Features
 
