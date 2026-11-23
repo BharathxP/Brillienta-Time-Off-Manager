@@ -640,12 +640,46 @@ async function main() {
     assert.ok(items(st, 'Notifications').some((n) => n.Recipient === maya && /Reminder/.test(n.Title)));
   });
 
-  await scenario('Access: apply recommended permissions breaks inheritance on every list', async () => {
+  await scenario('Access: BrillTM groups are created, filled from Admin › Access and granted on every list', async () => {
     const p = await open(admin, 'admin/access');
+    assert.match(await p.locator('.to-admin').innerText(), /BrillTM Admins[\s\S]*not created yet/);
     await p.click('button:has-text("Apply recommended permissions")');
     assert.match(await toast(p), /Permissions applied/);
-    const st = await state();
-    Object.values(st.lists).forEach((l) => assert.ok(l.unique && l.assignments.length >= 1, l.title));
+    let st = await state();
+    const g = (name) => Object.values(st.groups).filter((x) => x.Title === name)[0];
+    const emails = (name) => g(name).members.map((m) => m.Email).sort();
+    assert.ok(g('BrillTM Admins') && g('BrillTM HR') && g('BrillTM Users'), Object.values(st.groups).map((x) => x.Title).join(', '));
+    assert.deepStrictEqual(emails('BrillTM Admins'), [admin]);
+    assert.deepStrictEqual(emails('BrillTM HR'), [admin, hana].sort());
+    assert.ok(g('BrillTM Users').members.some((m) => /spo-grid-all-users/.test(m.LoginName)), 'Everyone except external users in BrillTM Users');
+    const READ = 1073741826;
+    const CONTRIBUTE = 1073741827;
+    Object.values(st.lists).forEach((l) => {
+      assert.ok(l.unique, l.title + ' stops inheriting');
+      const role = (id) => l.assignments.filter((a) => a.principal === id).map((a) => a.role);
+      const usersRole = ['BrillTM_Settings', 'BrillTM_Employees', 'BrillTM_Audit'].indexOf(l.title) >= 0 ? READ : CONTRIBUTE;
+      assert.deepStrictEqual(role(g('BrillTM Users').Id), [usersRole], l.title + ' users');
+      assert.deepStrictEqual(role(g('BrillTM HR').Id), [CONTRIBUTE], l.title + ' HR');
+      assert.deepStrictEqual(role(g('BrillTM Admins').Id), [CONTRIBUTE], l.title + ' admins');
+      assert.ok(l.assignments.every((a) => a.principal >= 10), l.title + ': only the BrillTM groups are granted directly');
+    });
+    // Adding an app admin under Access and saving updates the BrillTM Admins group.
+    const admins = p.locator('.to-card', { hasText: 'Roles' }).locator('.ms-ComboBox-container', { has: p.locator('label:text-is("App admins")') });
+    await admins.locator('button').click();
+    await p.locator('[role=option]', { hasText: 'Dan Director' }).first().click();
+    await p.click('button:has-text("Save changes")');
+    await p.waitForTimeout(800);
+    st = await state();
+    assert.deepStrictEqual(emails('BrillTM Admins'), [admin, 'dan.director@contoso.com']);
+    // Removing Hana from HR takes her out of BrillTM HR.
+    await p.locator('.to-card', { hasText: 'Roles' }).locator('.to-chip', { hasText: 'Hana HR' }).locator('button').click();
+    await p.click('button:has-text("Save changes")');
+    await p.waitForTimeout(800);
+    st = await state();
+    assert.deepStrictEqual(emails('BrillTM HR'), [admin]);
+    await go(p, 'people');
+    await go(p, 'admin/access');
+    assert.match(await p.locator('.to-admin').innerText(), /BrillTM HR\s*1 member/);
   });
 
   await scenario('Licence: when the trial has ended the app locks (data kept) and shows the licence page to admins', async () => {

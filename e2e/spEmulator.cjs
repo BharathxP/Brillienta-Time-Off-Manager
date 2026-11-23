@@ -19,7 +19,9 @@ const SITE = '/sites/hr';
 const BUILT_IN = { Id: 'Counter', ID: 'Counter', Title: 'Text', Created: 'DateTime', Modified: 'DateTime', Attachments: 'Boolean', AuthorId: 'Number', EditorId: 'Number' };
 
 function createState(users) {
-  return { lists: {}, users, principals: {}, nextPrincipal: 100, log: [] };
+  // Every site starts with SharePoint's own three groups.
+  const groups = { 3: { Id: 3, Title: 'Human Resources Owners', members: [] }, 4: { Id: 4, Title: 'Human Resources Members', members: [] }, 5: { Id: 5, Title: 'Human Resources Visitors', members: [] } };
+  return { lists: {}, users, principals: {}, nextPrincipal: 100, groups, nextGroup: 10, log: [] };
 }
 
 function odataError(status, message) {
@@ -145,6 +147,42 @@ function handle(state, method, url, headers, body) {
     if (!user.IsSiteAdmin) return odataError(403, 'Access denied. You do not have permission to perform this action or access this resource.');
     state.lists[d.Title] = { title: d.Title, id: crypto.randomUUID(), created: new Date().toISOString(), fields: {}, items: [], nextId: 1, props: { EnableAttachments: true, Hidden: false }, unique: false, assignments: [] };
     return { status: 201, body: { Id: state.lists[d.Title].id, Title: d.Title } };
+  }
+  // Site groups: SharePoint's own (Owners 3, Members 4, Visitors 5) and the ones the app creates.
+  if (api.startsWith('web/associatedmembergroup')) return { status: 200, body: { Id: 4 } };
+  if (api.startsWith('web/associatedvisitorgroup')) return { status: 200, body: { Id: 5 } };
+  if (api.startsWith('web/associatedownergroup')) return { status: 200, body: { Id: 3 } };
+  const gByName = /^web\/sitegroups\/getbyname\('((?:[^']|'')+)'\)/.exec(api);
+  if (gByName) {
+    const name = gByName[1].replace(/''/g, "'");
+    const g = Object.values(state.groups).filter((x) => x.Title === name)[0];
+    return g ? { status: 200, body: { Id: g.Id, Title: g.Title } } : odataError(404, 'Group cannot be found.');
+  }
+  if (api === 'web/sitegroups' && method === 'POST') {
+    if (!user.IsSiteAdmin) return odataError(403, 'Access denied. You do not have permission to perform this action or access this resource.');
+    const d = json();
+    if (Object.values(state.groups).some((x) => x.Title === d.Title)) return odataError(400, 'The specified name is already in use.');
+    const g = { Id: state.nextGroup++, Title: d.Title, Description: d.Description, members: [] };
+    state.groups[g.Id] = g;
+    return { status: 201, body: { Id: g.Id, Title: g.Title } };
+  }
+  const gUsers = /^web\/sitegroups\((\d+)\)\/users(?:\/removebyid\((\d+)\))?/.exec(api);
+  if (gUsers) {
+    const g = state.groups[Number(gUsers[1])];
+    if (!g) return odataError(404, 'Group cannot be found.');
+    if (gUsers[2]) {
+      if (!user.IsSiteAdmin) return odataError(403, 'Access denied.');
+      g.members = g.members.filter((m) => m.Id !== Number(gUsers[2]));
+      return { status: 200, body: {} };
+    }
+    if (method === 'POST') {
+      if (!user.IsSiteAdmin) return odataError(403, 'Access denied.');
+      const login = json().LoginName;
+      if (!state.principals[login]) state.principals[login] = state.nextPrincipal++;
+      if (!g.members.some((m) => m.LoginName === login)) g.members.push({ Id: state.principals[login], LoginName: login, Email: login.indexOf('membership|') > 0 ? login.split('|').pop() : '' });
+      return { status: 201, body: {} };
+    }
+    return { status: 200, body: { value: g.members } };
   }
   const lm = /^web\/lists\/getbytitle\('((?:[^']|'')+)'\)(.*)$/i.exec(api);
   if (!lm) return odataError(404, 'Not implemented in the emulator: ' + api);

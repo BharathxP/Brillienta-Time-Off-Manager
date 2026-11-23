@@ -15,7 +15,7 @@ import { DelegationCard } from '../approvals/Approvals';
 import { MONTH_NAMES, relativeTime } from '../../services/dates';
 import { Provisioner } from '../../services/Provisioner';
 import { SETTING_KEYS } from '../../services/SettingsStore';
-import { listTitle, LISTS, SCHEMA_VERSION } from '../../schema/schema';
+import { GROUP_NAMES, listTitle, LISTS, SCHEMA_VERSION } from '../../schema/schema';
 import { DEFAULT_ACCENT, DEFAULT_BRAND } from '../../schema/defaults';
 
 export interface ISectionProps {
@@ -47,6 +47,21 @@ export function AdminPage(props: { section?: string }): JSX.Element {
   const [busy, run] = useBusy();
   React.useEffect(() => setDraft(config), [config]);
   const dirty = JSON.stringify(draft) !== JSON.stringify(config);
+  const app = useApp();
+  // Saving Access also brings the BrillTM Admins / BrillTM HR groups in step (once permissions have been applied).
+  const save = async (): Promise<void> => {
+    const rolesChanged = JSON.stringify([draft.admins, draft.hr]) !== JSON.stringify([config.admins, config.hr]);
+    await saveConfig(draft, section.label);
+    if (section.key === 'access' && rolesChanged && app.settings.get(SETTING_KEYS.securityAppliedAt)) {
+      try {
+        const res = await new Provisioner(app.sp, app.svc.prefix).syncGroups(app.tenantId, draft.admins, draft.hr, () => undefined);
+        if (res.errors.length) app.toast(`Groups partly updated: ${res.errors[0]}`, 'warning');
+        else app.toast(`${GROUP_NAMES.admins} and ${GROUP_NAMES.hr} updated.`, 'success');
+      } catch (e) {
+        app.toast(`Settings saved, but the groups could not be updated: ${(e as Error).message}`, 'warning');
+      }
+    }
+  };
   const editsConfig = ['general', 'types', 'workflows', 'calendars', 'templates', 'rules', 'm365', 'notifications', 'integrations', 'access'].indexOf(section.key) >= 0;
   const sp: ISectionProps = { draft, setDraft };
   let body: JSX.Element;
@@ -99,7 +114,7 @@ export function AdminPage(props: { section?: string }): JSX.Element {
           editsConfig ? (
             <>
               <DefaultButton text="Discard" disabled={!dirty || busy} onClick={() => setDraft(config)} />
-              <PrimaryButton text={busy ? 'Saving…' : 'Save changes'} disabled={!dirty || busy} onClick={() => void run(() => saveConfig(draft, section.label), 'Settings saved.')} />
+              <PrimaryButton text={busy ? 'Saving…' : 'Save changes'} disabled={!dirty || busy} onClick={() => void run(() => save(), 'Settings saved.')} />
             </>
           ) : undefined
         }
@@ -356,8 +371,12 @@ function IntegrationsAdmin(props: ISectionProps): JSX.Element {
 
 function AccessAdmin(props: ISectionProps): JSX.Element {
   const { draft, setDraft } = props;
-  const { sp, svc, tenantId, settings } = useApp();
+  const { sp, svc, tenantId, settings, config } = useApp();
   const [busy, run] = useBusy();
+  const [groups, setGroups] = React.useState<Array<{ name: string; id: number; members: number }>>([]);
+  React.useEffect(() => {
+    new Provisioner(sp, svc.prefix).findGroups().then(setGroups).catch(() => undefined);
+  }, [sp, svc.prefix, config.admins, config.hr]);
   const [log, setLog] = React.useState<string[]>([]);
   const applied = settings.get(SETTING_KEYS.securityAppliedAt);
   const prov = new Provisioner(sp, svc.prefix);
@@ -376,10 +395,39 @@ function AccessAdmin(props: ISectionProps): JSX.Element {
           {svc && <DeptHeads {...props} />}
         </div>
       </Card>
-      <Card title="SharePoint lists" icon="Permissions">
+      <Card title="SharePoint lists & groups" icon="Permissions">
         <p className="to-muted" style={{ marginTop: 0 }}>
-          The app keeps its data in {LISTS.length} lists on this site ({LISTS.map((l) => listTitle(svc.prefix, l.key)).join(', ')}). Recommended permissions: everyone may read the settings, employees and audit lists and contribute to the rest; HR and app admins contribute everywhere.
+          The app keeps its data in {LISTS.length} lists on this site ({LISTS.map((l) => listTitle(svc.prefix, l.key)).join(', ')}). <b>Apply recommended permissions</b> creates three SharePoint groups and gives them access to the lists:
         </p>
+        <table className="to-table" style={{ marginBottom: 12 }}>
+          <thead>
+            <tr>
+              <th>Group</th>
+              <th>Members</th>
+              <th>Access to the lists</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              { name: GROUP_NAMES.admins, who: 'The app admins above (kept in step when you save)', access: 'Contribute on every list' },
+              { name: GROUP_NAMES.hr, who: 'The HR people above (kept in step when you save)', access: 'Contribute on every list' },
+              { name: GROUP_NAMES.users, who: 'Everyone except external users at first — change it in SharePoint to limit who may use the app', access: 'Read settings, employees, audit; contribute to the rest' }
+            ].map((g) => {
+              const found = groups.filter((x) => x.name === g.name)[0];
+              return (
+                <tr key={g.name}>
+                  <td>
+                    <strong>{g.name}</strong>
+                    <div className="to-small to-muted">{found ? `${found.members} member${found.members === 1 ? '' : 's'}` : 'not created yet'}</div>
+                  </td>
+                  <td className="to-small">{g.who}</td>
+                  <td className="to-small">{g.access}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <p className="to-small to-muted">The site’s own Members and Visitors groups are taken off the app’s lists; site owners keep Full Control.</p>
         <div className="to-row">
           <DefaultButton text="Validate & repair lists" disabled={busy} onClick={() => void run(async () => {
             const out: string[] = [];
@@ -391,9 +439,10 @@ function AccessAdmin(props: ISectionProps): JSX.Element {
           }, 'Lists checked.')} />
           <PrimaryButton text="Apply recommended permissions" disabled={busy} onClick={() => void run(async () => {
             const out: string[] = [];
-            const errors = await prov.applySecurity(tenantId, draft.admins.concat(draft.hr), (m) => out.push(m));
+            const errors = await prov.applySecurity(tenantId, draft.admins, draft.hr, (m) => out.push(m));
             await settings.set(SETTING_KEYS.securityAppliedAt, new Date().toISOString());
             setLog(out.concat(errors));
+            setGroups(await prov.findGroups());
           }, 'Permissions applied.')} />
           {applied && <span className="to-small to-muted">Last applied {relativeTime(applied)}</span>}
         </div>

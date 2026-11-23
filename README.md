@@ -56,7 +56,8 @@ Preview roles: `?role=admin` (default), `?role=hr`, `?role=employee`; `?fresh=1`
 4. Optional: add it to Teams (*Sync to Teams* in the app catalog) as a tab or personal app; the **Team Leave
    Calendar** web part shows only the calendar.
 5. Admin › Notifications: **Download the flow package** and import it in Power Automate (My flows › Import ›
-   Import package (legacy)), or build the 3-step flow by hand. Admin › Access: apply the recommended list permissions.
+   Import package (legacy)), or build the 3-step flow by hand. Admin › Access: **Apply recommended permissions** — this
+   creates the SharePoint groups **BrillTM Admins**, **BrillTM HR** and **BrillTM Users** (see below).
 
 **Updates:** deploy the new package; when a release adds lists or columns, the next visit by a site owner adds them.
 
@@ -73,6 +74,17 @@ Preview roles: `?role=admin` (default), `?role=hr`, `?role=employee`; `?fresh=1`
 | `BrillTM_EmailQueue` | Emails for the Power Automate flow |
 | `BrillTM_Events` | Outbox of request events for flows and other systems |
 | `BrillTM_Audit` | Settings, balance and on-behalf changes |
+
+### SharePoint groups
+
+| Group | Members | Access to the lists |
+| --- | --- | --- |
+| `BrillTM Admins` | App admins from Admin › Access (kept in step on save) | Contribute on every list |
+| `BrillTM HR` | HR from Admin › Access (kept in step on save) | Contribute on every list |
+| `BrillTM Users` | "Everyone except external users" at first; narrow it in SharePoint to limit who may use the app | Read `BrillTM_Settings`, `BrillTM_Employees`, `BrillTM_Audit`; contribute to the rest |
+
+The lists stop inheriting site permissions; the site's own Members and Visitors groups are taken off them and site
+owners keep Full Control. Names are in `GROUP_NAMES` (`schema/schema.ts`).
 
 Balances are never stored: they are computed from the policy, the ledger and the requests
 (`services/balances.ts`), so policy changes apply at once and every number can be explained.

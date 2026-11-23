@@ -3,6 +3,8 @@
 ## 1.2.0
 
 - All lists carry the Brillienta brand prefix: `BrillTM_Requests`, `BrillTM_Employees`, `BrillTM_Settings`, ...
+- Permissions go through branded SharePoint groups: BrillTM Admins, BrillTM HR and BrillTM Users. Admin and HR
+  membership follows Admin › Access; the site's Members and Visitors groups are taken off the app's lists.
 
 ## 1.1.1 — fixes from end-to-end testing
 

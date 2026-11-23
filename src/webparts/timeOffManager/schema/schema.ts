@@ -7,6 +7,13 @@ export const SCHEMA_VERSION = 1;
 /** Brand prefix of every list the app creates: BrillTM_Requests, BrillTM_Employees, ... */
 export const LIST_PREFIX = 'BrillTM_';
 
+/** Brand names of the SharePoint groups the app creates (Admin › Access › Apply recommended permissions). */
+export const GROUP_NAMES = {
+  admins: 'BrillTM Admins',
+  hr: 'BrillTM HR',
+  users: 'BrillTM Users'
+};
+
 export type FieldType = 'Text' | 'Note' | 'Number' | 'Boolean' | 'DateTime' | 'Choice';
 
 export interface IFieldDef {

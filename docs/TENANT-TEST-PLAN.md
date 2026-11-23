@@ -39,7 +39,7 @@ Use a test site and 4 test accounts: **Admin** (site owner), **Manager**, **Empl
 | 3.1 | Blackouts & staffing: block a week for the Employee's department | Employee cannot submit there; HR gets a warning |
 | 3.2 | Employees › CSV › opening balances template, fill, import | Balances equal the file |
 | 3.3 | Reports › Export balances (Excel), Leave register | Files open in Excel |
-| 3.4 | Admin › Access › Apply recommended permissions | Lists stop inheriting; Employee can still request (test 2.2 again) |
+| 3.4 | Admin › Access › Apply recommended permissions | Site settings › People and groups shows BrillTM Admins, BrillTM HR, BrillTM Users with the right members; lists stop inheriting; Employee can still request (test 2.2 again) |
 | 3.5 | As Employee, open `…#/admin` | Overview, no admin navigation |
 | 3.6 | Teams & Outlook: pick a team, approve a leave | Event in the team's channel calendar |
 | 3.7 | Sync to Teams (app catalog), add as a tab and personal app | App works in Teams |

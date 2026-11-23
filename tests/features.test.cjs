@@ -87,3 +87,8 @@ test('every list carries the BrillTM_ brand prefix', () => {
   assert.strictEqual(LIST_PREFIX, 'BrillTM_');
   assert.deepStrictEqual(LISTS.map((l) => listTitle(LIST_PREFIX, l.key)), ['BrillTM_Settings', 'BrillTM_Employees', 'BrillTM_Requests', 'BrillTM_Ledger', 'BrillTM_Delegations', 'BrillTM_Notifications', 'BrillTM_EmailQueue', 'BrillTM_Events', 'BrillTM_Audit']);
 });
+
+test('SharePoint groups carry the BrillTM brand', () => {
+  const { GROUP_NAMES } = lib('schema/schema');
+  assert.deepStrictEqual(GROUP_NAMES, { admins: 'BrillTM Admins', hr: 'BrillTM HR', users: 'BrillTM Users' });
+});
