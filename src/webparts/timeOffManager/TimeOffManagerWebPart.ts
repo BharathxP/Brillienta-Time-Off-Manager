@@ -9,12 +9,8 @@ import { initializeIcons } from '@fluentui/react';
 import * as strings from 'TimeOffManagerWebPartStrings';
 import App, { IAppProps } from './components/App';
 import { LIST_PREFIX } from './schema/schema';
-import { resolveListPrefix, settingsListProbe } from './services/listPrefix';
-import { SPHttpClient } from '@microsoft/sp-http';
 
 export interface ITimeOffManagerWebPartProps {
-  /** Fixed at "BrillTM_" by the manifest: the lists are found through it. */
-  listPrefix: string;
   /** What the web part shows: the whole app, the team calendar or my leave. */
   view?: 'app' | 'calendar' | 'my';
 }
@@ -22,11 +18,8 @@ export interface ITimeOffManagerWebPartProps {
 let iconsReady = false;
 
 export default class TimeOffManagerWebPart extends BaseClientSideWebPart<ITimeOffManagerWebPartProps> {
-  private _prefix: string = LIST_PREFIX;
-
   protected async onInit(): Promise<void> {
     await super.onInit();
-    this._prefix = await this._resolvePrefix();
     if (!iconsReady) {
       initializeIcons(undefined, { disableWarnings: true });
       iconsReady = true;
@@ -46,18 +39,12 @@ export default class TimeOffManagerWebPart extends BaseClientSideWebPart<ITimeOf
         manageWeb: perms.hasPermission(SPPermission.manageWeb) || perms.hasPermission(SPPermission.managePermissions)
       },
       tenantId: aad && aad.tenantId ? aad.tenantId.toString() : undefined,
-      prefix: this._prefix,
+      prefix: LIST_PREFIX,
       appVersion: this.manifest.version,
       graphFactory: ctx.msGraphClientFactory,
       host: { inTeams: !!(ctx.sdks && ctx.sdks.microsoftTeams), view: this.properties.view || 'app' }
     };
     ReactDom.render(React.createElement(App, props), this.domElement);
-  }
-
-  /** BrillTM_, or the TO_ lists of a site set up before 1.2 (services/listPrefix.ts). */
-  private _resolvePrefix(): Promise<string> {
-    const http = this.context.spHttpClient;
-    return resolveListPrefix(this.properties.listPrefix, settingsListProbe(this.context.pageContext.web.absoluteUrl, (url) => http.get(url, SPHttpClient.configurations.v1)));
   }
 
   protected onDispose(): void {

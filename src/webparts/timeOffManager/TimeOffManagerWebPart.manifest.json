@@ -16,7 +16,7 @@
       "title": { "default": "Brillienta Time Off Manager" },
       "description": { "default": "Leave requests, balances, multilevel approvals, comp off and the team calendar." },
       "officeFabricIconFontName": "Airplane",
-      "properties": { "listPrefix": "BrillTM_", "view": "app" }
+      "properties": { "view": "app" }
     },
     {
       "groupId": "5c03119e-3074-46fd-976b-c60198311f70",
@@ -24,7 +24,7 @@
       "title": { "default": "Team Leave Calendar" },
       "description": { "default": "Who is away: the team calendar of Brillienta Time Off Manager." },
       "officeFabricIconFontName": "CalendarWeek",
-      "properties": { "listPrefix": "BrillTM_", "view": "calendar" }
+      "properties": { "view": "calendar" }
     }
   ]
 }

@@ -58,8 +58,7 @@ Preview roles: `?role=admin` (default), `?role=hr`, `?role=employee`; `?fresh=1`
 5. Admin › Notifications: **Download the flow package** and import it in Power Automate (My flows › Import ›
    Import package (legacy)), or build the 3-step flow by hand. Admin › Access: apply the recommended list permissions.
 
-**Upgrading from 1.0:** deploy the new package; the next time a site owner opens the app, the new columns
-(schema version 2) are added automatically. Until then everyone can keep working — the new fields are simply not saved.
+**Updates:** deploy the new package; when a release adds lists or columns, the next visit by a site owner adds them.
 
 ## Data (SharePoint lists, prefix `BrillTM_`)
 

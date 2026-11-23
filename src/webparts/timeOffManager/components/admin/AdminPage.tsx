@@ -386,7 +386,6 @@ function AccessAdmin(props: ISectionProps): JSX.Element {
             const res = await prov.ensureSchema((m) => out.push(m));
             if (res.ok) {
               await settings.set(SETTING_KEYS.schemaVersion, String(SCHEMA_VERSION));
-              svc.schemaVersion = SCHEMA_VERSION;
             }
             setLog(out.concat(res.errors));
           }, 'Lists checked.')} />

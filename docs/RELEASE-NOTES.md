@@ -2,8 +2,7 @@
 
 ## 1.2.0
 
-- Lists carry the Brillienta brand prefix: `BrillTM_Requests`, `BrillTM_Employees`, `BrillTM_Settings`, ... (was `TO_`).
-  Sites set up with an earlier version keep their `TO_` lists and keep working; new sites get `BrillTM_` lists.
+- All lists carry the Brillienta brand prefix: `BrillTM_Requests`, `BrillTM_Employees`, `BrillTM_Settings`, ...
 
 ## 1.1.1 — fixes from end-to-end testing
 
@@ -27,7 +26,6 @@
 - Opening-balance CSV import, bulk adjustments, leaving dates (prorated entitlement), remove sample data.
 - Excel exports, leave register for any date range, Bradford factor and leave liability reports.
 - Outlook automatic replies, Microsoft 365 group (Teams channel) calendar, downloadable Power Automate flow package.
-- Schema version 2 (new columns are added automatically when a site owner opens the app).
 
 ## 1.0.0
 

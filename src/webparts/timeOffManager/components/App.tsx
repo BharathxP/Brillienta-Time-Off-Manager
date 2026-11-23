@@ -145,15 +145,13 @@ export default function App(props: IAppProps): JSX.Element {
         setPhase({ kind: props.permissions.manageLists ? 'setup' : 'notInstalled' });
         return;
       }
-      svc.schemaVersion = version;
       if (version < SCHEMA_VERSION && props.permissions.manageLists) {
-        // An update added columns: a site owner's visit adds them (until then the app writes without them).
+        // A release added lists or columns: a site owner's visit adds them.
         try {
           const res = await new Provisioner(sp, props.prefix).ensureSchema(() => undefined);
           if (res.ok) {
             await settings.set(SETTING_KEYS.schemaVersion, String(SCHEMA_VERSION));
             await settings.set(SETTING_KEYS.appVersion, props.appVersion);
-            svc.schemaVersion = SCHEMA_VERSION;
           }
         } catch {
           // stays on the earlier columns; Admin › Access › Validate & repair can retry

@@ -1,13 +1,11 @@
 // SharePoint lists the app keeps its data in. The Provisioner creates and repairs them from these definitions;
 // Power Automate and Power BI read the same lists (docs/INTEGRATIONS.md).
 
-/** 2: Requests.PartialDays, AutoReply, GroupEventId; Employees.LeavingDate. */
-export const SCHEMA_VERSION = 2;
+/** Version of the list definitions below. Raise it when a release adds lists or columns: a site owner's next visit adds them. */
+export const SCHEMA_VERSION = 1;
 
 /** Brand prefix of every list the app creates: BrillTM_Requests, BrillTM_Employees, ... */
 export const LIST_PREFIX = 'BrillTM_';
-/** Prefix used before 1.2 (sites set up then keep working). */
-export const LEGACY_LIST_PREFIX = 'TO_';
 
 export type FieldType = 'Text' | 'Note' | 'Number' | 'Boolean' | 'DateTime' | 'Choice';
 
