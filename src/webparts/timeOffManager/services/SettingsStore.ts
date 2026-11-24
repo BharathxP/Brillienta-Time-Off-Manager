@@ -3,6 +3,10 @@ import { listTitle } from '../schema/schema';
 
 export const SETTING_KEYS = {
   config: 'Config',
+  /** Address of a SharePoint page the app runs on: links in emails point there (not to Teams' host page). */
+  pageUrl: 'PageUrl',
+  /** '1' = Teams opens this site when search finds several Time Off Manager sites. */
+  teamsDefault: 'TeamsDefault',
   schemaVersion: 'SchemaVersion',
   appVersion: 'AppVersion',
   installedAt: 'InstalledAt',

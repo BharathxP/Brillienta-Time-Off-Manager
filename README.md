@@ -61,6 +61,24 @@ Preview roles: `?role=admin` (default), `?role=hr`, `?role=employee`; `?fresh=1`
 
 **Updates:** deploy the new package; when a release adds lists or columns, the next visit by a site owner adds them.
 
+## Publishing (Microsoft Marketplace and Teams)
+
+What the marketplace and Teams need is in the package and checked by `tests/package.test.cjs`:
+
+| Item | Where |
+| --- | --- |
+| Name **Brillienta Time Off Manager**, short and long description (ends with Get started, Help and Contact us links) | `config/package-solution.json` |
+| App icon 96 px, five 1366 × 768 screenshots | `sharepoint/images/` (`npm run icons`, `node tools/screenshots/capture.cjs` after `npm run preview`) |
+| Web part picker icon = the app logo (not a font icon) | `TimeOffManagerWebPart.manifest.json` › `iconImageUrl` |
+| Teams app manifest v1.25 (`supportsChannelFeatures: tier1`), colour 192 px and white outline 32 px icons | `teams/` — regenerate with `npm run teams`, validated against Microsoft's schema |
+| Privacy statement and terms | `docs/PRIVACY.md`, `docs/TERMS.md` (published at brillienta.com/privacy and /terms) |
+
+**Teams:** after uploading the package, a SharePoint admin selects the app in the tenant app catalog and chooses
+**Sync to Teams**. It appears under Apps › Built for your org as a personal app and a channel tab. In Teams the web part
+runs on the team's (or root) site, so it finds the Time Off Manager site itself: the tab's "Site with the Time Off
+Manager lists" setting, else the host site, else SharePoint search for `BrillTM_Settings` (several found: the site
+marked under Admin › Teams & Outlook, else the person picks once). Links in emails always point at the SharePoint page.
+
 ## Data (SharePoint lists, prefix `BrillTM_`)
 
 | List | Holds |

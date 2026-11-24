@@ -7,6 +7,9 @@ const config = require('./webpack.config.cjs');
 const out = path.resolve(__dirname, '../preview-dist');
 fs.mkdirSync(out, { recursive: true });
 ['index.html'].forEach((f) => fs.copyFileSync(path.resolve(__dirname, f), path.join(out, f)));
+const fonts = path.resolve(__dirname, '../node_modules/@fluentui/font-icons-mdl2/fonts');
+fs.mkdirSync(path.join(out, 'fonts'), { recursive: true });
+fs.readdirSync(fonts).forEach((f) => fs.copyFileSync(path.join(fonts, f), path.join(out, 'fonts', f)));
 
 webpack(config, (err, stats) => {
   if (err || stats.hasErrors()) {

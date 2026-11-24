@@ -3,7 +3,7 @@ import { Checkbox, ChoiceGroup, DatePicker, DayOfWeek, DefaultButton, Dropdown, 
 import { IRequestFormOptions, useApp } from '../AppContext';
 import { ILeaveTemplate, IRecurrence, LeaveUnit, PartialDays, RecurrenceFreq } from '../../models/types';
 import { EmployeePicker, TypeChip, NumberBox } from '../common/Ui';
-import { addDays, fmtDate, fmtDays, fmtNum, leaveYearOf, today, WEEKDAY_SHORT, calendarFor, addTime } from '../../services/dates';
+import { addDays, fmtDate, fmtDays, fmtNum, leaveYearOf, nextWorkingDay, today, WEEKDAY_SHORT, calendarFor, addTime } from '../../services/dates';
 import { IDraft, duration, occurrences, validateDraft, describeRecurrence, teamClash } from '../../services/requests';
 import { bookable, computeBalance } from '../../services/balances';
 import { buildSteps, lc } from '../../services/workflow';
@@ -110,8 +110,9 @@ export function RequestForm(props: { options: IRequestFormOptions; onClose: () =
     kind: o.kind || 'leave',
     employeeEmail: o.employeeEmail || me.email,
     leaveType: o.leaveType || (firstType ? firstType.key : ''),
-    start: o.start || addDays(today(), 1),
-    end: o.start || addDays(today(), 1),
+    // The next working day of this person's calendar, so the form never opens on a weekend or holiday.
+    start: o.start || nextWorkingDay(calendarFor(config, employee), addDays(today(), 1)),
+    end: o.start || nextWorkingDay(calendarFor(config, employee), addDays(today(), 1)),
     unit: 'day',
     halfDayPart: 'am',
     startTime: calendarFor(config, employee).dayStart,
@@ -273,7 +274,7 @@ export function RequestForm(props: { options: IRequestFormOptions; onClose: () =
               <div className="to-chips">
                 {myTemplates.map((t) => (
                   <button key={t.key} type="button" className="to-chip is-button" onClick={() => applyTemplate(t)}>
-                    <Icon iconName="Lightning" /> {t.name}
+                    <Icon iconName="LightningBolt" /> {t.name}
                   </button>
                 ))}
               </div>
@@ -428,7 +429,7 @@ export function RequestForm(props: { options: IRequestFormOptions; onClose: () =
             <div className="to-label">Approval</div>
             {auto ? (
               <div className="to-small">
-                <Icon iconName="Lightning" /> Approved automatically ({type && type.autoApprove.maxDays > 0 ? `up to ${type.autoApprove.maxDays} day${type.autoApprove.maxDays === 1 ? '' : 's'}` : 'always'})
+                <Icon iconName="LightningBolt" /> Approved automatically ({type && type.autoApprove.maxDays > 0 ? `up to ${type.autoApprove.maxDays} day${type.autoApprove.maxDays === 1 ? '' : 's'}` : 'always'})
               </div>
             ) : steps.length ? (
               <ol className="to-route">

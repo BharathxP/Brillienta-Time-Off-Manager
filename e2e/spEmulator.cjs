@@ -18,10 +18,25 @@ const crypto = require('crypto');
 const SITE = '/sites/hr';
 const BUILT_IN = { Id: 'Counter', ID: 'Counter', Title: 'Text', Created: 'DateTime', Modified: 'DateTime', Attachments: 'Boolean', AuthorId: 'Number', EditorId: 'Number' };
 
-function createState(users) {
+function newSite(title) {
   // Every site starts with SharePoint's own three groups.
-  const groups = { 3: { Id: 3, Title: 'Human Resources Owners', members: [] }, 4: { Id: 4, Title: 'Human Resources Members', members: [] }, 5: { Id: 5, Title: 'Human Resources Visitors', members: [] } };
-  return { lists: {}, users, principals: {}, nextPrincipal: 100, groups, nextGroup: 10, log: [] };
+  const groups = { 3: { Id: 3, Title: `${title} Owners`, members: [] }, 4: { Id: 4, Title: `${title} Members`, members: [] }, 5: { Id: 5, Title: `${title} Visitors`, members: [] } };
+  return { title, lists: {}, groups, nextGroup: 10 };
+}
+
+function createState(users) {
+  const state = { sites: { [SITE]: newSite('Human Resources') }, users, principals: {}, nextPrincipal: 100, log: [] };
+  // The HR site is the default one (tests read state.lists / state.groups).
+  Object.defineProperty(state, 'lists', { get: () => state.sites[SITE].lists, set: (v) => (state.sites[SITE].lists = v), enumerable: true });
+  Object.defineProperty(state, 'groups', { get: () => state.sites[SITE].groups, enumerable: true });
+  return state;
+}
+
+/** The site a request is for (/sites/<name>, or '' for the tenant root site); created empty on first use. */
+function siteOf(state, path) {
+  const sitePath = path.substring(0, path.indexOf('/_api/'));
+  if (!state.sites[sitePath]) state.sites[sitePath] = newSite(sitePath ? sitePath.split('/').pop() : 'Contoso');
+  return { sitePath, site: state.sites[sitePath] };
 }
 
 function odataError(status, message) {
@@ -122,18 +137,35 @@ function validate(list, data) {
   return '';
 }
 
-function handle(state, method, url, headers, body) {
+function handle(state, method, url, headers, body, origin) {
   const userEmail = (headers['x-user'] || '').toLowerCase();
   const user = state.users.filter((u) => u.Email.toLowerCase() === userEmail)[0];
   if (!user) return odataError(401, 'Access denied: unknown user ' + userEmail);
   const verb = (headers['x-http-method'] || method).toUpperCase();
   const p = decodeURIComponent(url.split('?')[0]);
   const api = p.substring(p.indexOf('/_api/') + 6);
+  const { sitePath, site } = siteOf(state, p);
   const q = query(url);
   const json = () => (body && body.length ? JSON.parse(body.toString('utf8')) : {});
-  state.log.push(`${user.Email} ${verb} ${api}`);
+  state.log.push(`${user.Email} ${verb} ${sitePath}/_api/${api}`);
 
-  if (api === 'web' || api === 'web/') return { status: 200, body: { Id: 'web-1', Title: 'Human Resources' } };
+  if (api === 'web' || api === 'web/') {
+    // Full permission mask for site owners, read/contribute for everyone else.
+    const perms = user.IsSiteAdmin ? { High: '2147483647', Low: '4294967295' } : { High: '432', Low: '1011030767' };
+    return { status: 200, body: { Id: 'web-' + sitePath, Title: site.title, EffectiveBasePermissions: perms } };
+  }
+  // SharePoint search: lists whose title matches the first word of the query, on every site (all readable here).
+  if (api === 'search/query') {
+    const word = ((q.querytext || '').replace(/^'|'$/g, '').split(/\s+/)[0] || '').toLowerCase();
+    const rows = [];
+    Object.keys(state.sites).forEach((sp) => {
+      Object.keys(state.sites[sp].lists).forEach((t) => {
+        if (t.toLowerCase() !== word) return;
+        rows.push({ Cells: [{ Key: 'Title', Value: t }, { Key: 'Path', Value: `${origin}${sp}/Lists/${t}/AllItems.aspx` }, { Key: 'SPWebUrl', Value: `${origin}${sp}` }] });
+      });
+    });
+    return { status: 200, body: { PrimaryQueryResult: { RelevantResults: { RowCount: rows.length, Table: { Rows: rows } } } } };
+  }
   if (api.startsWith('web/currentuser')) return { status: 200, body: { Id: user.Id, Title: user.Title, Email: user.Email, LoginName: 'i:0#.f|membership|' + user.Email, IsSiteAdmin: !!user.IsSiteAdmin } };
   if (api === 'web/ensureuser') {
     const login = json().logonName;
@@ -143,10 +175,10 @@ function handle(state, method, url, headers, body) {
   if (api.startsWith('web/roledefinitions')) return { status: 200, body: { value: [{ Id: 1073741826, RoleTypeKind: 2 }, { Id: 1073741827, RoleTypeKind: 3 }, { Id: 1073741830, RoleTypeKind: 6 }, { Id: 1073741829, RoleTypeKind: 5 }] } };
   if (api === 'web/lists' && method === 'POST') {
     const d = json();
-    if (state.lists[d.Title]) return odataError(400, `A list, survey, discussion board, or document library with the specified title already exists in this Web site.  Please choose another title.`);
+    if (site.lists[d.Title]) return odataError(400, `A list, survey, discussion board, or document library with the specified title already exists in this Web site.  Please choose another title.`);
     if (!user.IsSiteAdmin) return odataError(403, 'Access denied. You do not have permission to perform this action or access this resource.');
-    state.lists[d.Title] = { title: d.Title, id: crypto.randomUUID(), created: new Date().toISOString(), fields: {}, items: [], nextId: 1, props: { EnableAttachments: true, Hidden: false }, unique: false, assignments: [] };
-    return { status: 201, body: { Id: state.lists[d.Title].id, Title: d.Title } };
+    site.lists[d.Title] = { title: d.Title, id: crypto.randomUUID(), created: new Date().toISOString(), fields: {}, items: [], nextId: 1, props: { EnableAttachments: true, Hidden: false }, unique: false, assignments: [] };
+    return { status: 201, body: { Id: site.lists[d.Title].id, Title: d.Title } };
   }
   // Site groups: SharePoint's own (Owners 3, Members 4, Visitors 5) and the ones the app creates.
   if (api.startsWith('web/associatedmembergroup')) return { status: 200, body: { Id: 4 } };
@@ -155,20 +187,20 @@ function handle(state, method, url, headers, body) {
   const gByName = /^web\/sitegroups\/getbyname\('((?:[^']|'')+)'\)/.exec(api);
   if (gByName) {
     const name = gByName[1].replace(/''/g, "'");
-    const g = Object.values(state.groups).filter((x) => x.Title === name)[0];
+    const g = Object.values(site.groups).filter((x) => x.Title === name)[0];
     return g ? { status: 200, body: { Id: g.Id, Title: g.Title } } : odataError(404, 'Group cannot be found.');
   }
   if (api === 'web/sitegroups' && method === 'POST') {
     if (!user.IsSiteAdmin) return odataError(403, 'Access denied. You do not have permission to perform this action or access this resource.');
     const d = json();
-    if (Object.values(state.groups).some((x) => x.Title === d.Title)) return odataError(400, 'The specified name is already in use.');
-    const g = { Id: state.nextGroup++, Title: d.Title, Description: d.Description, members: [] };
-    state.groups[g.Id] = g;
+    if (Object.values(site.groups).some((x) => x.Title === d.Title)) return odataError(400, 'The specified name is already in use.');
+    const g = { Id: site.nextGroup++, Title: d.Title, Description: d.Description, members: [] };
+    site.groups[g.Id] = g;
     return { status: 201, body: { Id: g.Id, Title: g.Title } };
   }
   const gUsers = /^web\/sitegroups\((\d+)\)\/users(?:\/removebyid\((\d+)\))?/.exec(api);
   if (gUsers) {
-    const g = state.groups[Number(gUsers[1])];
+    const g = site.groups[Number(gUsers[1])];
     if (!g) return odataError(404, 'Group cannot be found.');
     if (gUsers[2]) {
       if (!user.IsSiteAdmin) return odataError(403, 'Access denied.');
@@ -188,8 +220,8 @@ function handle(state, method, url, headers, body) {
   if (!lm) return odataError(404, 'Not implemented in the emulator: ' + api);
   const title = lm[1].replace(/''/g, "'");
   const rest = lm[2];
-  const list = state.lists[title];
-  if (!list) return odataError(404, `List '${title}' does not exist at site with URL 'https://contoso.sharepoint.com${SITE}'.`);
+  const list = site.lists[title];
+  if (!list) return odataError(404, `List '${title}' does not exist at site with URL 'https://contoso.sharepoint.com${sitePath}'.`);
   const hasField = (f) => !!list.fields[f] || !!BUILT_IN[f];
 
   if (rest === '' || rest === '/') {
@@ -236,9 +268,9 @@ function handle(state, method, url, headers, body) {
       if (!list.props.EnableAttachments) return odataError(400, 'Attachments are not enabled on this list.');
       row.__files = (row.__files || []).concat({ FileName: im[3].replace(/''/g, "'"), size: body ? body.length : 0 });
       row.Attachments = true;
-      return { status: 200, body: { FileName: im[3], ServerRelativeUrl: `${SITE}/Lists/${title}/Attachments/${id}/${im[3]}` } };
+      return { status: 200, body: { FileName: im[3], ServerRelativeUrl: `${sitePath}/Lists/${title}/Attachments/${id}/${im[3]}` } };
     }
-    return { status: 200, body: { value: (row.__files || []).map((f) => ({ FileName: f.FileName, ServerRelativeUrl: `${SITE}/Lists/${title}/Attachments/${id}/${f.FileName}` })) } };
+    return { status: 200, body: { value: (row.__files || []).map((f) => ({ FileName: f.FileName, ServerRelativeUrl: `${sitePath}/Lists/${title}/Attachments/${id}/${f.FileName}` })) } };
   }
   const pub = (r) => {
     const out = {};
@@ -264,7 +296,7 @@ function handle(state, method, url, headers, body) {
     const skip = Number(q.$skiptoken || 0);
     const page = rows.slice(skip, skip + top).map(pub);
     const out = { value: page };
-    if (skip + top < rows.length) out['odata.nextLink'] = `http://localhost${SITE}/_api/web/lists/getbytitle('${encodeURIComponent(title)}')/items?${url.split('?')[1].replace(/&?\$skiptoken=\d+/, '')}&$skiptoken=${skip + top}`;
+    if (skip + top < rows.length) out['odata.nextLink'] = `${origin}${sitePath}/_api/web/lists/getbytitle('${encodeURIComponent(title)}')/items?${url.split('?')[1].replace(/&?\$skiptoken=\d+/, '')}&$skiptoken=${skip + top}`;
     return { status: 200, body: out };
   }
   if (verb === 'DELETE') {
@@ -307,17 +339,18 @@ function start(port, users, staticDir) {
         state.lists = JSON.parse(body.toString('utf8')).lists;
         return send(200, { ok: true });
       }
-      if (req.url.indexOf(`${SITE}/_api/`) === 0) {
+      if (req.url.indexOf('/_api/') >= 0) {
         let r;
         try {
-          r = handle(state, req.method, req.url, req.headers, body);
+          r = handle(state, req.method, req.url, req.headers, body, `http://${req.headers.host}`);
         } catch (e) {
           r = odataError(500, 'Emulator error: ' + e.message);
         }
         return send(r.status, r.body);
       }
-      if (req.url.indexOf('/_layouts/') >= 0) return send(404, '', 'text/plain');
-      const file = path.join(staticDir, req.url === '/' || req.url.startsWith('/?') ? 'index.html' : req.url.split('?')[0]);
+      if (req.url.indexOf('/_layouts/') >= 0 && !/teamshostedapp/i.test(req.url)) return send(404, '', 'text/plain');
+      const isPage = req.url === '/' || req.url.startsWith('/?') || /\/_layouts\/15\/teamshostedapp\.aspx/i.test(req.url);
+      const file = path.join(staticDir, isPage ? 'index.html' : req.url.split('?')[0]);
       if (file.indexOf(staticDir) === 0 && fs.existsSync(file) && fs.statSync(file).isFile()) return send(200, fs.readFileSync(file), file.endsWith('.html') ? 'text/html' : 'application/javascript');
       return send(404, 'not found', 'text/plain');
     });

@@ -18,6 +18,12 @@ export interface IHostInfo {
   inTeams: boolean;
   /** What the web part shows: the whole app, or only the team calendar / my leave (page layouts). */
   view: 'app' | 'calendar' | 'my';
+  /** Where the lists' site came from: '' = this site, 'property' = the tab's setting, 'found' = search (Teams). */
+  siteSource?: '' | 'property' | 'found';
+  /** The configured site could not be opened. */
+  siteError?: string;
+  /** Teams found several Time Off Manager sites: the person picks one. */
+  siteChoices?: Array<{ url: string; title: string }>;
 }
 
 export type ToastKind = 'success' | 'error' | 'info' | 'warning';

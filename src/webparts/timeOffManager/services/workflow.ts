@@ -91,7 +91,8 @@ export function buildSteps(config: IConfig, dir: IDirectory, delegations: IDeleg
     if (!people.length && level.kind !== 'hr') people = config.hr.filter((p) => lc(p.email) !== self);
     if (!people.length) people = config.admins.filter((p) => lc(p.email) !== self);
     if (!people.length) return;
-    const approvers = withDelegates(people, delegations, on);
+    // A delegate can be the requester (an approver who delegated to them): they never approve their own leave.
+    const approvers = withDelegates(people, delegations, on).filter((p) => lc(p.email) !== self);
     const prev = steps[steps.length - 1];
     const key = (a: IPerson[]): string => a.map((x) => lc(x.email)).sort().join(';');
     if (prev && key(prev.approvers) === key(approvers)) return;
@@ -123,6 +124,11 @@ export function startWorkflow(type: ILeaveType, steps: IApprovalStep[], days: nu
 
 export type Decision = 'approve' | 'reject';
 
+/** Every approval level has approved (or was skipped): the leave stands. */
+export function fullyApproved(r: Pick<ILeaveRequest, 'steps'>): boolean {
+  return r.steps.every((s) => s.status === 'approved' || s.status === 'skipped');
+}
+
 export interface IActor {
   email: string;
   name: string;
@@ -139,7 +145,8 @@ export function isStepApprover(r: ILeaveRequest, email: string): boolean {
 /** Whether someone may decide the current step: its approver, or HR / an admin deciding for them. */
 export function canDecide(r: ILeaveRequest, actor: IActor, config: IConfig): { ok: boolean; onBehalf: boolean } {
   if (r.status !== 'Pending' && r.status !== 'CancelRequested') return { ok: false, onBehalf: false };
-  if (lc(r.employeeEmail) === lc(actor.email) && !actor.isAdmin) return { ok: false, onBehalf: false };
+  // Nobody decides their own request, admins included (their leave goes to their own manager or HR).
+  if (lc(r.employeeEmail) === lc(actor.email)) return { ok: false, onBehalf: false };
   if (r.status === 'CancelRequested') {
     const approvers = r.steps.reduce<string[]>((all, s) => all.concat(s.approvers.map((a) => lc(a.email))), []);
     if (approvers.indexOf(lc(actor.email)) >= 0) return { ok: true, onBehalf: false };
@@ -172,7 +179,8 @@ export function decide(r: ILeaveRequest, decision: Decision, actor: IActor, comm
       return { status: 'Cancelled', steps: r.steps, currentStep: r.currentStep, history, final: true, next: [] };
     }
     history.push({ at: nowIso, by, action: 'Cancellation declined', note });
-    return { status: 'Approved', steps: r.steps, currentStep: r.currentStep, history, final: true, next: [] };
+    // Back to where it was: approved if every level had approved, otherwise still waiting for the open level.
+    return { status: fullyApproved(r) ? 'Approved' : 'Pending', steps: r.steps, currentStep: r.currentStep, history, final: fullyApproved(r), next: [] };
   }
   const steps = r.steps.map((s) => ({ ...s }));
   const step = steps[r.currentStep];
@@ -225,7 +233,7 @@ export function refreshDelegates(r: ILeaveRequest, delegations: IDelegation[], o
   const s = r.steps[r.currentStep];
   if (r.status !== 'Pending' || !s) return undefined;
   const originals = s.approvers.filter((a) => !a.delegatedFrom);
-  const updated = withDelegates(originals, delegations, on);
+  const updated = withDelegates(originals, delegations, on).filter((a) => lc(a.email) !== lc(r.employeeEmail));
   const key = (a: IStepApprover[]): string => a.map((x) => lc(x.email) + (x.delegatedFrom ? '*' : '')).join(';');
   if (key(updated) === key(s.approvers)) return undefined;
   return r.steps.map((x, i) => (i === r.currentStep ? { ...x, approvers: updated } : x));

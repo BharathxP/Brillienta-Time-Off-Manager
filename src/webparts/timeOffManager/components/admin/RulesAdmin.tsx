@@ -3,6 +3,7 @@ import { Checkbox, DefaultButton, Dropdown, IconButton, PrimaryButton, TextField
 import { IBlackout } from '../../models/types';
 import { ISectionProps } from './AdminPage';
 import { useApp } from '../AppContext';
+import { SETTING_KEYS } from '../../services/SettingsStore';
 import { Card, NumberBox } from '../common/Ui';
 import { IsoDatePicker } from '../requests/RequestForm';
 import { addDays, fmtDate, today } from '../../services/dates';
@@ -109,6 +110,7 @@ export function M365Admin(props: ISectionProps): JSX.Element {
   };
   return (
     <>
+      <TeamsSiteCard />
       <Card title="Teams channel calendar (Microsoft 365 group)" icon="TeamsLogo">
         <div className="to-stack">
           <Toggle label="Add approved leave to a Microsoft 365 group calendar" checked={g.enabled} onChange={(_, c) => setDraft({ ...draft, groupCalendar: { ...g, enabled: !!c } })} />
@@ -138,5 +140,37 @@ export function M365Admin(props: ISectionProps): JSX.Element {
         </div>
       </Card>
     </>
+  );
+}
+
+/** How Teams finds this site, and the mark that settles it when an organisation has several. */
+function TeamsSiteCard(): JSX.Element {
+  const { settings, sp, toast, host } = useApp();
+  const [on, setOn] = React.useState(settings.get(SETTING_KEYS.teamsDefault) === '1');
+  const [busy, setBusy] = React.useState(false);
+  const save = async (value: boolean): Promise<void> => {
+    setBusy(true);
+    try {
+      await settings.set(SETTING_KEYS.teamsDefault, value ? '1' : '0');
+      setOn(value);
+      toast(value ? 'Teams opens this site when several Time Off Manager sites exist.' : 'Mark removed.', 'success');
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card title="Microsoft Teams" icon="TeamsLogo">
+      <div className="to-stack">
+        <p className="to-muted" style={{ margin: 0 }}>
+          To add the app to Teams, a SharePoint admin selects <b>Brillienta Time Off Manager</b> in the tenant app catalog and chooses <b>Sync to Teams</b>. It then appears in Teams under Apps › Built for your org, as a personal app and as a channel tab.
+          In Teams the app opens this site (<code>{sp.webUrl}</code>) by itself: it finds the <code>BrillTM_Settings</code> list with SharePoint search. New sites can take a while to appear in search.
+        </p>
+        <Toggle label="Use this site in Teams when the organisation has several Time Off Manager sites" checked={on} disabled={busy} onChange={(_, c) => void save(!!c)} />
+        {host.inTeams && <div className="to-small to-muted">Open in Teams now{host.siteSource === 'found' ? ' (site found with search)' : host.siteSource === 'property' ? ' (site set on this tab)' : ''}.</div>}
+        <div className="to-small to-muted">A channel tab can also point at a site of its own: edit the tab and fill in “Site with the Time Off Manager lists”.</div>
+      </div>
+    </Card>
   );
 }

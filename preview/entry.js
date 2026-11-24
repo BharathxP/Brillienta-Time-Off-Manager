@@ -20,7 +20,8 @@ const author = { Id: 7, Title: user.Title, EMail: user.Email };
 const http = createFakeHttp(user);
 
 function render() {
-  initializeIcons(undefined, { disableWarnings: true });
+  // Icon font from node_modules (copied next to the page by preview/build.cjs), so the preview works offline.
+  initializeIcons('fonts/', { disableWarnings: true });
   ReactDom.render(
     React.createElement(App, { http, webUrl: WEB, siteTitle: 'Human Resources', permissions: { manageLists: role === 'admin', manageWeb: role === 'admin' }, tenantId: '6f1c2a9e-0b7d-4c55-9e3a-2d8f41b07c13', prefix: 'BrillTM_', appVersion: APP_VERSION, host: { inTeams: false, view: params.get('view') || 'app' } }),
     document.getElementById('root')

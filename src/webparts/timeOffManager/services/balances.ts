@@ -140,13 +140,16 @@ export function policyEntitlement(type: ILeaveType, e: IEmployee | undefined, ye
   return { annual: round2(full), entitled: round2(accrued), tenureExtra: a.tenureExtra };
 }
 
-/** Requests that use a balance: approved (and approved ones waiting for a cancellation decision). */
+const allApproved = (r: Pick<ILeaveRequest, 'steps'>): boolean => (r.steps || []).every((s) => s.status === 'approved' || s.status === 'skipped');
+
+/** Requests that use a balance: approved, and approved ones waiting for a cancellation decision. */
 export function isUsing(r: ILeaveRequest): boolean {
-  return r.kind === 'leave' && (r.status === 'Approved' || r.status === 'CancelRequested');
+  return r.kind === 'leave' && (r.status === 'Approved' || (r.status === 'CancelRequested' && allApproved(r)));
 }
 
+/** Requests waiting for approval, including a not-yet-approved one whose withdrawal is waiting for a decision. */
 export function isPending(r: ILeaveRequest): boolean {
-  return r.kind === 'leave' && r.status === 'Pending';
+  return r.kind === 'leave' && (r.status === 'Pending' || (r.status === 'CancelRequested' && !allApproved(r)));
 }
 
 interface ICredit {

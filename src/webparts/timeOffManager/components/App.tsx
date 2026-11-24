@@ -19,6 +19,8 @@ import { LICENSE_PUBLIC_KEY } from '../services/licensing/publicKey';
 import { DEFAULT_LOGO } from '../assets/defaultLogo';
 import { Shell } from './Shell';
 import { Provisioner } from '../services/Provisioner';
+import { TEAMS_CHOICE_KEY, isShareablePage, pageAddress, sameSite, shareableBase } from '../services/site';
+import { DefaultButton } from '@fluentui/react';
 import { SetupWizard } from './setup/SetupWizard';
 import { LicenseLocked } from './admin/LicenseAdmin';
 import { Loading } from './common/Ui';
@@ -57,8 +59,8 @@ export default function App(props: IAppProps): JSX.Element {
   const settings = React.useMemo(() => new SettingsStore(sp, props.prefix), [sp, props.prefix]);
   const graph = React.useMemo(() => (props.graphFactory ? new GraphService(props.graphFactory) : undefined), [props.graphFactory]);
   const configRef = React.useRef<IConfig>(mergeConfig(undefined));
-  const pageUrl = window.location.href.split('#')[0];
-  const engine = React.useMemo(() => new Engine(svc, new Notifier(svc, () => configRef.current, pageUrl), graph), [svc, graph, pageUrl]);
+  const pageUrl = shareableBase(window.location.href, settings.get(SETTING_KEYS.pageUrl) || '');
+  const engine = React.useMemo(() => new Engine(svc, new Notifier(svc, () => configRef.current, () => shareableBase(window.location.href, settings.get(SETTING_KEYS.pageUrl) || '')), graph), [svc, graph, settings]);
 
   const [phase, setPhase] = React.useState<Phase>({ kind: 'loading' });
   const [me, setMe] = React.useState<ICurrentUser | undefined>();
@@ -243,6 +245,9 @@ export default function App(props: IAppProps): JSX.Element {
     housekeeping.current = true;
     const actor = { email: me.email, name: me.title, isHr, isAdmin };
     (async () => {
+      // Remember this page for links in emails (HR and admins may write settings; Teams' host page is never used).
+      const here = pageAddress(window.location.href);
+      if (isHr && isShareablePage(here) && !sameSite(here, settings.get(SETTING_KEYS.pageUrl) || '')) await settings.set(SETTING_KEYS.pageUrl, here).catch(() => undefined);
       const last = Date.parse((await settings.fresh(SETTING_KEYS.lastReminderRun).catch(() => '')) || '');
       if (isNaN(last) || Date.now() - last > 3600000) {
         await settings.set(SETTING_KEYS.lastReminderRun, new Date().toISOString());
@@ -272,6 +277,27 @@ export default function App(props: IAppProps): JSX.Element {
   // layer the root class and brand variables so the to-* styles reach them too (as in the Employee Directory).
   const layerSettings = React.useMemo(() => ({ Layer: { styles: { root: [styles.root, frameStyle] } as unknown as ILayerStyles } }), [frameStyle]);
 
+  // Teams found several Time Off Manager sites: the person picks one (remembered on this device).
+  if (host.siteChoices && host.siteChoices.length) {
+    return (
+      <ThemeProvider theme={theme}>
+        <div className={styles.root} style={frameStyle}>
+          <SiteChooser choices={host.siteChoices} />
+        </div>
+      </ThemeProvider>
+    );
+  }
+  if (host.siteError) {
+    return (
+      <div className={styles.root}>
+        <div className="to-card" style={{ margin: 16 }}>
+          <MessageBar messageBarType={MessageBarType.error} isMultiline>
+            {host.siteError} Check the web part’s “Site with the Time Off Manager lists” setting.
+          </MessageBar>
+        </div>
+      </div>
+    );
+  }
   if (phase.kind === 'loading' || !me) {
     return (
       <div className={styles.root}>
@@ -365,5 +391,34 @@ export default function App(props: IAppProps): JSX.Element {
       </AppCtx.Provider>
       </Customizer>
     </ThemeProvider>
+  );
+}
+
+/** Several Time Off Manager sites were found from Teams: pick one (remembered on this device). */
+function SiteChooser(props: { choices: Array<{ url: string; title: string }> }): JSX.Element {
+  const pick = (url: string): void => {
+    try {
+      window.localStorage.setItem(TEAMS_CHOICE_KEY, url);
+    } catch {
+      // private window: asked again next time
+    }
+    window.location.reload();
+  };
+  return (
+    <div className="to-setup">
+      <h1>Which Time Off Manager?</h1>
+      <p className="to-muted">More than one site in your organisation has Brillienta Time Off Manager. Choose the one to open; this device remembers it. An admin can mark one site for everyone under Admin › Teams &amp; Outlook.</p>
+      <div className="to-card to-stack" style={{ textAlign: 'left' }}>
+        {props.choices.map((c) => (
+          <div key={c.url} className="to-deleg-row">
+            <span>
+              <strong>{c.title}</strong>
+              <div className="to-small to-muted">{c.url}</div>
+            </span>
+            <DefaultButton text="Open" onClick={() => pick(c.url)} />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

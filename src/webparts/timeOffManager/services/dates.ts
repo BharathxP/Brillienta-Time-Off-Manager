@@ -108,6 +108,15 @@ export function isWorkingDay(cal: IWorkCalendar, iso: string): boolean {
   return cal.workDays.indexOf(weekday(iso)) >= 0 && !holidayOn(cal, iso);
 }
 
+/** The first working day on or after a day (the day itself when no working day is found within a month). */
+export function nextWorkingDay(cal: IWorkCalendar, from: string): string {
+  for (let i = 0; i < 31; i++) {
+    const d = addDays(from, i);
+    if (isWorkingDay(cal, d)) return d;
+  }
+  return from;
+}
+
 export interface IDayCount {
   /** Days that count against the balance. */
   days: number;

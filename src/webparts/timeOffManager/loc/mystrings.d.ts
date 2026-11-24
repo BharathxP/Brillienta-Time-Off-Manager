@@ -5,6 +5,10 @@ declare interface ITimeOffManagerWebPartStrings {
   ViewApp: string;
   ViewCalendar: string;
   ViewMy: string;
+  SiteGroupName: string;
+  SiteUrlLabel: string;
+  SiteUrlDescription: string;
+  SiteUrlInvalid: string;
 }
 
 declare module 'TimeOffManagerWebPartStrings' {

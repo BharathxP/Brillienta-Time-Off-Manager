@@ -1,5 +1,28 @@
 # Release notes
 
+## 1.3.0 — publication and end-to-end fixes
+
+Publication (Microsoft Marketplace and Teams, as for Brillienta Employee Directory):
+
+- App name **Brillienta Time Off Manager**; the long description ends with Get started, Help and Contact us links and
+  explains Sync to Teams. Five 1366 × 768 screenshots; the web part picker shows the app logo.
+- Teams app manifest v1.25 with `supportsChannelFeatures: tier1` and branded icons, shipped in `teams/` and validated
+  against Microsoft's schema.
+- In Teams the app finds the Time Off Manager site by itself (tab setting, host site, or SharePoint search; several
+  sites: an admin-marked default or the person's choice). Emails sent from Teams link to the SharePoint page, without
+  query strings.
+- Privacy statement and terms of use.
+
+Fixes found in review and end-to-end testing:
+
+- A delegate who was also the requester could approve their own leave; admins could approve their own leave.
+- Declining the withdrawal of a still-pending request marked it Approved; it now goes back to Pending, the employee
+  gets a "cancellation declined" notice instead of an "approved" email, and the balance counts it as pending.
+- Comp-off credits older than two leave years dropped out of balances.
+- The request form opened on a weekend or holiday; it now opens on the next working day.
+- Three icons were blank (templates, auto-approval, withdraw, sabbatical); every icon name is now checked by a test.
+- "Avg. time to decide" showed "—" for decisions made within an hour.
+
 ## 1.2.0
 
 - All lists carry the Brillienta brand prefix: `BrillTM_Requests`, `BrillTM_Employees`, `BrillTM_Settings`, ...

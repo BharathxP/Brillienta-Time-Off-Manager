@@ -28,7 +28,7 @@ const SECTIONS: Array<{ key: string; label: string; icon: string; adminOnly?: bo
   { key: 'types', label: 'Leave types & policies', icon: 'Airplane' },
   { key: 'workflows', label: 'Approval workflows', icon: 'Flow' },
   { key: 'calendars', label: 'Work weeks & holidays', icon: 'Calendar' },
-  { key: 'templates', label: 'Leave templates', icon: 'Lightning' },
+  { key: 'templates', label: 'Leave templates', icon: 'LightningBolt' },
   { key: 'rules', label: 'Blackouts & staffing', icon: 'Blocked' },
   { key: 'm365', label: 'Teams & Outlook', icon: 'TeamsLogo' },
   { key: 'delegation', label: 'Delegations', icon: 'Switch' },

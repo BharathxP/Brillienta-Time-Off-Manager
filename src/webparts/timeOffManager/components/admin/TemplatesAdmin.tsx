@@ -15,7 +15,7 @@ export function TemplatesAdmin(props: ISectionProps): JSX.Element {
   };
   return (
     <>
-      <Card title="Templates fill in the request form" icon="Lightning" actions={<PrimaryButton iconProps={{ iconName: 'Add' }} text="New template" onClick={add} />}>
+      <Card title="Templates fill in the request form" icon="LightningBolt" actions={<PrimaryButton iconProps={{ iconName: 'Add' }} text="New template" onClick={add} />}>
         <p className="to-muted" style={{ marginTop: 0 }}>Employees pick a template on the home page or in the request form; they only choose the date. Templates may repeat (weekly, bi-weekly, monthly) when the leave type allows it.</p>
       </Card>
       {draft.templates.map((t) => {

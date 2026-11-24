@@ -191,7 +191,7 @@ export function RequestDetails(props: { request: ILeaveRequest; onClose: () => v
               }}
             />
           )}
-          {canCancel && <DefaultButton iconProps={{ iconName: 'EventDecline' }} text={r.status === 'Pending' ? 'Withdraw' : 'Cancel leave'} disabled={busy} onClick={() => void cancel(false)} />}
+          {canCancel && <DefaultButton iconProps={{ iconName: 'EventDeclined' }} text={r.status === 'Pending' ? 'Withdraw' : 'Cancel leave'} disabled={busy} onClick={() => void cancel(false)} />}
           {canCancel && openSeries.length > 1 && <DefaultButton text={`Cancel the series (${openSeries.length})`} disabled={busy} onClick={() => void cancel(true)} />}
           {r.status === 'Pending' && (mine || isHr) && (
             <DefaultButton iconProps={{ iconName: 'Ringer' }} text="Remind approver" disabled={busy} onClick={() => void run(() => engine.remindNow(world, r).then(reload), 'Reminder sent.')} />

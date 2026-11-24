@@ -52,7 +52,7 @@ export function Home(): JSX.Element {
             <span className="to-small to-muted">Quick requests:</span>
             {config.templates.slice(0, 5).map((tp) => (
               <button key={tp.key} type="button" className="to-chip is-button" onClick={() => openRequest({ template: tp })}>
-                <Icon iconName="Lightning" /> {tp.name}
+                <Icon iconName="LightningBolt" /> {tp.name}
               </button>
             ))}
           </div>

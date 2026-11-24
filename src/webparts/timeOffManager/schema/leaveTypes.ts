@@ -61,7 +61,7 @@ const SEEDS: ISeed[] = [
   { key: 'medical', name: 'Medical appointment', code: 'MED', color: '#e74c3c', icon: 'Hospital', e: { days: 3 }, o: { units: { day: false, half: true, hours: true }, autoApprove: { enabled: true, maxDays: 0.5 }, allowRecurrence: true } },
   { key: 'care', name: 'Family care leave', code: 'FCL', color: '#d35400', icon: 'HeartFill', e: { days: 5 } },
   { key: 'relocation', name: 'Relocation leave', code: 'RLC', color: '#8e6e53', icon: 'MapPin', e: { days: 3, prorate: false } },
-  { key: 'sabbatical', name: 'Sabbatical', code: 'SAB', color: '#34495e', icon: 'Lighthouse', e: { days: 30, prorate: false }, o: { paid: false, minNoticeDays: 60, eligibility: { minServiceMonths: 60, grades: ['L4', 'L5'], genders: [] } } },
+  { key: 'sabbatical', name: 'Sabbatical', code: 'SAB', color: '#34495e', icon: 'Vacation', e: { days: 30, prorate: false }, o: { paid: false, minNoticeDays: 60, eligibility: { minServiceMonths: 60, grades: ['L4', 'L5'], genders: [] } } },
   { key: 'unpaid', name: 'Unpaid leave', code: 'LWP', color: '#95a5a6', icon: 'Money', e: { mode: 'unlimited' }, o: { paid: false } },
   { key: 'wellness', name: 'Wellness day', code: 'WD', color: '#1abc9c', icon: 'Emoji2', e: { days: 4 }, o: { units: { day: true, half: true, hours: false } } },
   { key: 'voting', name: 'Voting leave', code: 'VL', color: '#2980b9', icon: 'CheckboxComposite', e: { days: 1, prorate: false }, o: { units: { day: true, half: true, hours: true }, autoApprove: { enabled: true, maxDays: 1 } } },

@@ -3,7 +3,7 @@ import { LeaveService } from './LeaveService';
 import { fmtDays, fmtRange } from './dates';
 import { lc } from './workflow';
 
-export type LeaveEvent = 'submitted' | 'approved' | 'rejected' | 'stepApproved' | 'cancelled' | 'cancelRequested' | 'reminder' | 'escalated' | 'compoffCredited';
+export type LeaveEvent = 'submitted' | 'approved' | 'rejected' | 'stepApproved' | 'cancelled' | 'cancelRequested' | 'reminder' | 'escalated' | 'compoffCredited' | 'cancelDeclined';
 
 const SUBJECTS: Record<LeaveEvent, string> = {
   submitted: 'Leave request waiting for your approval',
@@ -14,7 +14,8 @@ const SUBJECTS: Record<LeaveEvent, string> = {
   cancelRequested: 'Cancellation waiting for your approval',
   reminder: 'Reminder: leave request waiting for your approval',
   escalated: 'Escalated: leave request waiting for approval',
-  compoffCredited: 'Comp off credited'
+  compoffCredited: 'Comp off credited',
+  cancelDeclined: 'Your cancellation was declined'
 };
 
 function esc(s: string): string {
@@ -41,16 +42,17 @@ export function emailHtml(config: IConfig, title: string, lines: Array<[string, 
 export class Notifier {
   private readonly _svc: LeaveService;
   private readonly _config: () => IConfig;
-  private readonly _link: string;
+  private readonly _link: () => string;
 
-  public constructor(svc: LeaveService, config: () => IConfig, pageUrl: string) {
+  /** `pageUrl`: the app's SharePoint page, read at send time (in Teams the current page only opens inside Teams). */
+  public constructor(svc: LeaveService, config: () => IConfig, pageUrl: () => string) {
     this._svc = svc;
     this._config = config;
     this._link = pageUrl;
   }
 
   public requestLink(r: ILeaveRequest, forApprover: boolean): string {
-    return `${this._link}#/${forApprover ? 'approvals' : 'requests'}?id=${r.id}`;
+    return `${this._link()}#/${forApprover ? 'approvals' : 'requests'}?id=${r.id}`;
   }
 
   public async send(event: LeaveEvent, r: ILeaveRequest, recipients: IPerson[], typeName: string, note?: string): Promise<void> {

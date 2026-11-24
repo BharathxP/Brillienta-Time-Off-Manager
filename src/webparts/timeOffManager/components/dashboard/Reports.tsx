@@ -123,8 +123,8 @@ export function Reports(): JSX.Element {
         <Kpi label="Days taken" value={fmtNum(daysTaken)} icon="Airplane" tint={1} />
         <Kpi label="Requests" value={reqs.length} icon="BulletedList" tint={2} />
         <Kpi label="Pending" value={pending} icon="Clock" tint={3} tone={pending ? 'warning' : undefined} />
-        <Kpi label="Avg. time to decide" value={avgHours ? (avgHours < 48 ? `${Math.round(avgHours)} h` : `${Math.round(avgHours / 24)} d`) : '—'} icon="Timer" tint={4} />
-        <Kpi label="Auto-approved" value={autoApproved} icon="Lightning" tint={5} />
+        <Kpi label="Avg. time to decide" value={!hoursToDecide.length ? '—' : avgHours < 1 ? '< 1 h' : avgHours < 48 ? `${Math.round(avgHours)} h` : `${Math.round(avgHours / 24)} d`} icon="Timer" tint={4} />
+        <Kpi label="Auto-approved" value={autoApproved} icon="LightningBolt" tint={5} />
         <Kpi label="Away today" value={awayToday} icon="People" tint={6} />
       </div>
       <div className="to-grid to-grid-2">

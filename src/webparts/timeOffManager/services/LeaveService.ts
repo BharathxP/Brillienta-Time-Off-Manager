@@ -258,7 +258,7 @@ export class LeaveService {
   // ---------------------------------------------------------------- ledger
 
   public async loadLedger(fromYear: number): Promise<ILedgerEntry[]> {
-    const rows = await this.sp.getAll<SPItem>(`${this._items('ledger')}?$top=5000&$filter=LeaveYear ge ${fromYear - 1}`);
+    const rows = await this.sp.getAll<SPItem>(`${this._items('ledger')}?$top=5000&$filter=LeaveYear ge ${fromYear - 1} or EntryKind eq 'compoff'`);
     return rows.map(itemToLedger);
   }
 

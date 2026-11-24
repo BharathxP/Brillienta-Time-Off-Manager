@@ -76,7 +76,7 @@ export function LeaveTypesAdmin(props: ISectionProps): JSX.Element {
                     <td className="to-small">{policySummary(t)}</td>
                     <td className="to-small">{[t.units.day && 'days', t.units.half && 'half days', t.units.hours && 'hours'].filter((x) => !!x).join(', ')}</td>
                     <td className="to-small">
-                      {t.autoApprove.enabled ? <><Icon iconName="Lightning" /> auto{t.autoApprove.maxDays ? ` ≤ ${t.autoApprove.maxDays} d` : ''}, else </> : null}
+                      {t.autoApprove.enabled ? <><Icon iconName="LightningBolt" /> auto{t.autoApprove.maxDays ? ` ≤ ${t.autoApprove.maxDays} d` : ''}, else </> : null}
                       {wf ? wf.name : '—'}
                     </td>
                     <td>

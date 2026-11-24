@@ -9,7 +9,7 @@ const FONT = "'DM Sans', 'Segoe UI', sans-serif";
 function iconFor(title: string): string {
   if (/approved|credited/i.test(title)) return 'CheckMark';
   if (/declined/i.test(title)) return 'Cancel';
-  if (/cancel/i.test(title)) return 'EventDecline';
+  if (/cancel/i.test(title)) return 'EventDeclined';
   if (/reminder|escalated/i.test(title)) return 'Clock';
   return 'Inbox';
 }

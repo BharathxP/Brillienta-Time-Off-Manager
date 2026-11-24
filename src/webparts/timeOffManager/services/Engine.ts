@@ -180,7 +180,8 @@ export class Engine {
     const name = this.typeName(w, next.leaveType);
     const employee = [{ email: next.employeeEmail, name: next.employeeName }];
     if (wasCancelRequest) {
-      await this.notifier.send(next.status === 'Cancelled' ? 'cancelled' : 'approved', next, employee, name, next.status === 'Cancelled' ? 'Your cancellation was approved' : 'Your cancellation was declined; the leave stands');
+      const note = next.status === 'Cancelled' ? 'Your cancellation was approved' : next.status === 'Approved' ? 'The leave stands' : 'The request is still waiting for approval';
+      await this.notifier.send(next.status === 'Cancelled' ? 'cancelled' : 'cancelDeclined', next, employee, name, note);
       if (next.status === 'Cancelled') {
         await this.notifier.publish('cancelled', next, name, actor);
         await this._unpublishFromGroup(w, next);

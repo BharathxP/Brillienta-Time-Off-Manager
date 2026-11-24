@@ -107,6 +107,40 @@ async function open(email, hash, owner) {
   await page.waitForTimeout(600);
   return page;
 }
+/** Open the app the way Teams does: Teams' host page on another site (the web part finds the Time Off Manager site). */
+async function openTeams(email, hostSite, extra) {
+  const page = await as(email);
+  await page.goto('about:blank');
+  await page.goto(`${BASE}${hostSite}/_layouts/15/teamshostedapp.aspx?teams=1&user=${encodeURIComponent(email)}&host=${encodeURIComponent(hostSite)}${extra || ''}#/home`);
+  await page.waitForSelector('.to-app, .to-setup, .to-locked, .to-card', { timeout: 20000 });
+  await page.waitForTimeout(600);
+  return page;
+}
+async function fresh(email) {
+  if (sessions[email]) {
+    await sessions[email].context().close();
+    delete sessions[email];
+  }
+}
+/** A licence key signed with the test bundle's key pair (e2e/build.cjs). */
+function licenceKey(payload) {
+  const crypto = require('crypto');
+  const b64url = (buf) => Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const key = crypto.createPrivateKey(fs.readFileSync(path.join(__dirname, '..', 'e2e-dist', 'test-license-key.pem')));
+  const signed = 'TO1.' + b64url(JSON.stringify({ v: 1, id: 'TO-TEST', product: 'timeoff', customer: 'Contoso', issued: TODAY, ...payload }));
+  return signed + '.' + b64url(crypto.sign('sha256', Buffer.from(signed), { key, dsaEncoding: 'ieee-p1363' }));
+}
+const TENANT = '6f1c2a9e-0b7d-4c55-9e3a-2d8f41b07c13';
+const setConfig = (mutate) =>
+  seedLists((lists) => {
+    const row = lists.BrillTM_Settings.items.filter((r) => r.Title === 'Config')[0];
+    const cfg = JSON.parse(row.SettingValue);
+    mutate(cfg);
+    row.SettingValue = JSON.stringify(cfg);
+  });
+const cardText = async (page, name) => (await page.locator('.to-balance', { hasText: name }).first().textContent()).replace(/\s+/g, ' ');
+const daysLeft = (t) => Number(/(-?[\d.]+)\s*days left/.exec(t)[1]);
+
 async function go(page, hash) {
   await page.evaluate((h) => (window.location.hash = '#/' + h), hash);
   await page.waitForTimeout(500);
@@ -730,6 +764,299 @@ async function main() {
     const bi = await p.$$eval('input[readonly]', (els) => els.map((e) => e.value).join(' '));
     assert.match(bi, /BrillTM_Requests/);
     assert.match(bi, /BrillTM_Ledger/);
+  });
+
+  // ---------------------------------------------------------------- Microsoft Teams
+
+  await scenario('Teams: opened from a team site, the app finds the HR site with SharePoint search', async () => {
+    const p = await openTeams(eli, '/sites/eng');
+    const site = await p.evaluate(() => window.__site);
+    assert.strictEqual(site.source, 'found');
+    assert.strictEqual(site.url, `${BASE}/sites/hr`);
+    await go(p, 'requests');
+    await p.waitForSelector('.to-balance');
+    assert.match(await p.textContent('.to-page'), /Annual leave/);
+    // Outside Teams the same team site has no Time Off Manager: an employee is told it is not set up.
+    await fresh(eli);
+    const q = await (await as(eli)).goto(`${BASE}/?user=${eli}&host=/sites/eng#/home`).then(() => sessions[eli]);
+    await q.waitForSelector('.to-setup');
+    assert.match(await q.textContent('.to-setup'), /not set up on this site yet/);
+  });
+
+  await scenario('Teams: links in emails sent from Teams point at the SharePoint page, not Teams’ host page', async () => {
+    await open(admin, 'home'); // an HR admin on the real page records it
+    await new Promise((r) => setTimeout(r, 800));
+    const stored = items(await state(), 'Settings').filter((r) => r.Title === 'PageUrl')[0];
+    assert.ok(stored && stored.SettingValue.indexOf('teamshostedapp') < 0, JSON.stringify(stored));
+    await fresh(eli);
+    const p = await openTeams(eli, '/sites/eng');
+    await p.click('.to-nav-cta button');
+    await p.waitForSelector('.ms-Panel .to-request-form');
+    await pickType(p, 'Annual leave');
+    await setDate(p, 'From', addDays(MON, 43));
+    await setDate(p, 'To', addDays(MON, 43));
+    await submit(p);
+    const mail = items(await state(), 'EmailQueue').slice(-1)[0];
+    const link = ((/href="([^"]+)"/.exec(mail.MailBody) || [])[1] || '').replace(/&amp;/g, '&');
+    assert.strictEqual(stored.SettingValue, `${BASE}/`, 'recorded without query string');
+    assert.match(link, new RegExp(`^${BASE}/#/approvals\\?id=\\d+$`), link);
+    assert.ok(mail.MailBody.indexOf('teamshostedapp') < 0, 'no Teams host page link');
+  });
+
+  await scenario('Teams: several Time Off Manager sites → the person picks once; an admin can mark the default', async () => {
+    const st = await state();
+    const copy = JSON.parse(JSON.stringify(st.lists.BrillTM_Settings));
+    copy.items = copy.items.filter((i) => i.Title !== 'TeamsDefault');
+    st.sites['/sites/emea'] = { title: 'EMEA HR', lists: { BrillTM_Settings: copy }, groups: {}, nextGroup: 10 };
+    await fresh(ria);
+    const p = await openTeams(ria, '/sites/eng');
+    await p.waitForSelector('text=Which Time Off Manager?');
+    const text = await p.textContent('.to-setup');
+    assert.match(text, /\/sites\/hr/);
+    assert.match(text, /\/sites\/emea/);
+    await p.locator('.to-deleg-row', { hasText: '/sites/hr' }).locator('button').click();
+    await p.waitForSelector('.to-app');
+    assert.strictEqual((await p.evaluate(() => window.__site)).url, `${BASE}/sites/hr`);
+    const again = await openTeams(ria, '/sites/eng'); // remembered on this device
+    assert.strictEqual((await again.evaluate(() => window.__site)).url, `${BASE}/sites/hr`);
+    // Admin marks the HR site for Teams: someone new opens it directly.
+    const a = await open(admin, 'admin/m365');
+    await a.locator('.ms-Toggle', { hasText: 'Use this site in Teams' }).locator('button').click();
+    assert.match(await toast(a), /Teams opens this site/);
+    await fresh(dave);
+    const d = await openTeams(dave, '/sites/eng');
+    assert.strictEqual((await d.evaluate(() => window.__site)).url, `${BASE}/sites/hr`);
+    assert.ok(!(await d.locator('text=Which Time Off Manager?').count()));
+    delete (await state()).sites['/sites/emea'];
+  });
+
+  await scenario('Teams tab setting: a site address on the tab opens that site; a wrong address is explained', async () => {
+    await fresh(eli);
+    const p = await (await as(eli)).goto(`${BASE}/?user=${eli}&host=/sites/eng&site=${encodeURIComponent(BASE + '/sites/hr/SitePages/Leave.aspx')}#/home`).then(() => sessions[eli]);
+    await p.waitForSelector('.to-app');
+    const site = await p.evaluate(() => window.__site);
+    assert.deepStrictEqual([site.source, site.url], ['property', `${BASE}/sites/hr`]);
+    await fresh(eli);
+    const q = await (await as(eli)).goto(`${BASE}/?user=${eli}&host=/sites/eng&site=${encodeURIComponent('https://evil.example.com/sites/hr')}#/home`).then(() => sessions[eli]);
+    await q.waitForSelector('text=is not a SharePoint site address on this tenant');
+  });
+
+  // ---------------------------------------------------------------- regressions found in review
+
+  await scenario('A delegate who is also the requester never approves their own leave', async () => {
+    await seedLists((lists) => lists.BrillTM_Delegations.items.forEach((d) => (d.IsActive = false)));
+    const m = await open(maya, 'approvals');
+    const card = m.locator('.to-card', { hasText: 'Approval delegation' });
+    await card.locator('.ms-ComboBox-container', { has: m.locator('label:text-is("Delegate to")') }).locator('button').click();
+    await m.locator('[role=option]', { hasText: 'Eli Employee' }).first().click();
+    await card.locator('button:has-text("Delegate")').click();
+    await toast(m);
+    await fresh(eli);
+    const p = await open(eli, 'home');
+    await openForm(p);
+    await pickType(p, 'Annual leave');
+    await setDate(p, 'From', addDays(MON, 44));
+    await setDate(p, 'To', addDays(MON, 44));
+    const s1 = await summary(p);
+    assert.match(s1, /ManagerMaya Manager/);
+    assert.ok(!/for Maya Manager/.test(s1), s1);
+    await submit(p);
+    const r = findReq(await state(), (x) => x.EmployeeEmail === eli && x.StartDate === addDays(MON, 44))[0];
+    assert.strictEqual(r.CurrentApprovers, `;${maya};`);
+    await go(p, 'approvals');
+    const who = await p.$$eval('.to-table tbody tr td:nth-child(2) .to-person-name', (els) => els.map((e) => e.textContent));
+    assert.ok(who.length >= 1 && who.every((n) => n === 'Ria Rao'), 'as delegate Eli sees Ria’s requests but never his own: ' + who.join(', '));
+    await seedLists((lists) => lists.BrillTM_Delegations.items.forEach((d) => (d.IsActive = false)));
+  });
+
+  await scenario('Withdrawing a pending request with approval: declining it puts it back to Pending (not Approved)', async () => {
+    await setConfig((c) => (c.cancellation.pendingDirect = false));
+    await fresh(eli);
+    const p = await open(eli, 'requests');
+    await openRow(p, String(Number(addDays(MON, 44).substring(8))) + ' ');
+    await panelButton(p, 'Withdraw');
+    await confirmDialog(p, 'Maybe not');
+    await toast(p);
+    const id = findReq(await state(), (x) => x.EmployeeEmail === eli && x.StartDate === addDays(MON, 44))[0].Id;
+    assert.strictEqual(findReq(await state(), (x) => x.Id === id)[0].Status, 'CancelRequested');
+    const m = await open(maya, 'approvals');
+    await openRow(m, 'Cancellation pending');
+    await panelButton(m, 'Keep the leave');
+    await confirmDialog(m, 'Let us talk first');
+    await toast(m);
+    const st = await state();
+    assert.strictEqual(findReq(st, (x) => x.Id === id)[0].Status, 'Pending');
+    assert.ok(items(st, 'Notifications').some((n) => n.Recipient === eli && /cancellation was declined/i.test(n.Title)));
+    assert.ok(!items(st, 'EmailQueue').some((mm) => mm.MailTo === eli && /approved/i.test(mm.Title) && mm.Id > 0 && mm.Template === 'approved' && mm.Title.indexOf(addDays(MON, 44)) >= 0));
+    await setConfig((c) => (c.cancellation.pendingDirect = true));
+  });
+
+  await scenario('Admins cannot approve their own leave; it goes to their manager', async () => {
+    const a = await open(admin, 'home');
+    await openForm(a);
+    await pickType(a, 'Casual leave');
+    await setDate(a, 'From', addDays(MON, 45));
+    await setDate(a, 'To', addDays(MON, 46));
+    assert.match(await summary(a), /ManagerDan Director/);
+    await submit(a);
+    await go(a, 'approvals');
+    await a.click('.to-seg button:has-text("All open")');
+    await openRow(a, 'Alex Admin');
+    assert.strictEqual(await a.locator('.ms-Panel button', { hasText: /^Approve$/ }).count(), 0, 'no approve button on own request');
+    assert.ok((await a.locator('.ms-Panel button', { hasText: 'Remind approver' }).count()) === 1);
+    await closePanel(a);
+  });
+
+  // ---------------------------------------------------------------- more coverage
+
+  await scenario('Leave template: “Doctor appointment (2 h)” fills the form; 2-hour leave is approved by policy', async () => {
+    const p = await open(eli, 'home');
+    await p.click('.to-hero-templates button:has-text("Doctor appointment")');
+    await p.waitForSelector('.ms-Panel .to-request-form');
+    await setDate(p, 'Date', addDays(MON, 50));
+    assert.match(await summary(p), /Takes2 h.*Approved automatically/);
+    assert.match(await submit(p), /Approved straight away/);
+    const r = findReq(await state(), (x) => x.EmployeeEmail === eli && x.LeaveType === 'medical')[0];
+    assert.deepStrictEqual([r.Unit, r.Hours, r.StartTime, r.Status], ['hours', 2, '10:00', 'Approved']);
+  });
+
+  await scenario('Changing a policy applies at once: casual leave 8 → 10 days raises the balance by 2', async () => {
+    let p = await open(eli, 'requests');
+    const before = daysLeft(await cardText(p, 'Casual leave'));
+    const a = await open(admin, 'admin/types');
+    await a.locator('.to-table tbody tr', { hasText: 'Casual leave' }).locator('button:has-text("Edit")').click();
+    await a.click('.ms-Panel button[role=tab]:has-text("Entitlement")');
+    const days = a.locator('.ms-Panel input[role=spinbutton]').first();
+    await days.fill('10');
+    await days.press('Tab');
+    await a.click('.ms-Panel button:has-text("Done")');
+    await a.click('button:has-text("Save changes")');
+    await toast(a);
+    p = await open(eli, 'requests');
+    assert.strictEqual(daysLeft(await cardText(p, 'Casual leave')), before + 2);
+  });
+
+  await scenario('A new company holiday is left out of leave counts straight away', async () => {
+    const day = addDays(MON, 51); // a Wednesday
+    const a = await open(admin, 'admin/calendars');
+    const card = a.locator('.to-card', { hasText: 'Head office' }).first();
+    const date = card.locator('.ms-DatePicker', { has: a.locator('label:text-is("Date")') }).locator('input');
+    await date.click();
+    await date.fill(day);
+    await date.press('Enter');
+    await a.keyboard.press('Escape');
+    await card.locator('input[type=text]').last().fill('Company day');
+    await card.locator('button:has-text("Add")').click();
+    await a.click('button:has-text("Save changes")');
+    await toast(a);
+    const p = await open(eli, 'home');
+    await openForm(p);
+    await pickType(p, 'Casual leave');
+    await setDate(p, 'From', addDays(MON, 49));
+    await setDate(p, 'To', addDays(MON, 53));
+    const s1 = await summary(p);
+    assert.match(s1, /Takes4 days/, s1);
+    assert.match(s1, /Company day/);
+    await closePanel(p);
+  });
+
+  await scenario('Bulk approval: a manager approves everything waiting in one go', async () => {
+    const m = await open(maya, 'approvals');
+    const waiting = await m.locator('.to-table tbody tr').count();
+    assert.ok(waiting >= 2, `${waiting} waiting`);
+    await m.locator('.to-table thead .ms-Checkbox').click();
+    await m.click(`button:has-text("Approve ${waiting}")`);
+    assert.match(await toast(m), new RegExp(`${waiting} requests? approved`));
+    const st = await state();
+    assert.strictEqual(findReq(st, (x) => x.Status === 'Pending' && (x.CurrentApprovers || '').indexOf(`;${maya};`) >= 0).length, 0);
+  });
+
+  await scenario('My team: the manager sees both reports and exports their balances to Excel', async () => {
+    const m = await open(maya, 'team');
+    const text = await m.textContent('.to-page');
+    assert.match(text, /Eli Employee/);
+    assert.match(text, /Ria Rao/);
+    const [dl] = await Promise.all([m.waitForEvent('download'), m.click('button:has-text("Export balances")')]);
+    const file = path.join(shots, 'team.xlsx');
+    await dl.saveAs(file);
+    assert.strictEqual(fs.readFileSync(file).subarray(0, 2).toString(), 'PK');
+  });
+
+  await scenario('Notifications: opening one from the bell marks it read', async () => {
+    const p = await open(eli, 'home');
+    await p.click('button[aria-label^="Notifications"]');
+    await p.waitForSelector('.ms-Callout');
+    const unreadBefore = items(await state(), 'Notifications').filter((n) => n.Recipient === eli && !n.IsRead).length;
+    assert.ok(unreadBefore > 0);
+    await p.locator('.ms-Callout [role=button]').first().click();
+    await new Promise((r) => setTimeout(r, 500));
+    const unreadAfter = items(await state(), 'Notifications').filter((n) => n.Recipient === eli && !n.IsRead).length;
+    assert.strictEqual(unreadAfter, unreadBefore - 1);
+  });
+
+  await scenario('Phone: an employee requests leave on a phone-sized screen without sideways scrolling', async () => {
+    await fresh(ria);
+    const { devices } = require('playwright');
+    const ctx = await browser.newContext({ ...devices['iPhone 13'] });
+    const p = await ctx.newPage();
+    p.errors = [];
+    p.on('pageerror', (e) => p.errors.push(String(e)));
+    sessions[ria] = p;
+    await p.goto(`${BASE}/?user=${ria}#/home`);
+    await p.waitForSelector('.to-app');
+    await p.click('.to-hero button:has-text("Request time off")');
+    await p.waitForSelector('.ms-Panel .to-request-form');
+    await pickType(p, 'Casual leave');
+    await setDate(p, 'From', addDays(MON, 56));
+    await setDate(p, 'To', addDays(MON, 56));
+    const wide = await p.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
+    assert.ok(wide[0] <= wide[1] + 1, `page ${wide[0]}px on a ${wide[1]}px screen`);
+    await submit(p);
+    assert.ok(findReq(await state(), (x) => x.EmployeeEmail === ria && x.StartDate === addDays(MON, 56)).length === 1);
+  });
+
+  await scenario('New leave year: the first HR visit in January carries balances forward once', async () => {
+    const st0 = await state();
+    const year = Number(TODAY.substring(0, 4));
+    assert.ok(!items(st0, 'Ledger').some((l) => (l.UniqueKey || '').indexOf(`carry:${year}:`) === 0));
+    await fresh(admin);
+    const page = await as(admin);
+    await page.clock.setFixedTime(new Date(`${year + 1}-01-02T09:00:00`));
+    await page.goto(`${BASE}/?user=${admin}&owner=1#/home`);
+    await page.waitForSelector('.to-app');
+    await new Promise((r) => setTimeout(r, 2500));
+    const st = await state();
+    const carried = items(st, 'Ledger').filter((l) => (l.UniqueKey || '').indexOf(`carry:${year}:`) === 0);
+    assert.ok(carried.length > 0, 'carry-forward entries');
+    assert.ok(carried.every((l) => l.LeaveYear === year + 1 && l.EntryKind === 'carry'));
+    assert.ok(carried.filter((l) => l.LeaveType === 'annual').every((l) => l.Days <= 5), 'annual limited to 5 days');
+    assert.match(items(st, 'Settings').filter((r) => r.Title === 'CarriedYears')[0].SettingValue, new RegExp(String(year)));
+    await page.goto('about:blank');
+    await page.goto(`${BASE}/?user=${admin}&owner=1#/home`);
+    await new Promise((r) => setTimeout(r, 1500));
+    assert.strictEqual(items(await state(), 'Ledger').filter((l) => (l.UniqueKey || '').indexOf(`carry:${year}:`) === 0).length, carried.length, 'only once');
+    await fresh(admin);
+  });
+
+  await scenario('Licence: a key for another tenant is refused; a 3-user key limits who can request leave', async () => {
+    const a = await open(admin, 'admin/licence');
+    await a.fill('textarea[placeholder="TO1.…"]', licenceKey({ tenant: '11111111-2222-3333-4444-555555555555', users: 50 }));
+    await a.click('button:has-text("Activate")');
+    assert.match(await toast(a), /another Microsoft 365 organisation/);
+    await a.fill('textarea[placeholder="TO1.…"]', licenceKey({ tenant: TENANT, users: 3, expires: addDays(TODAY, 365) }));
+    await a.click('button:has-text("Activate")');
+    assert.match(await toast(a), /Licence activated/);
+    assert.match(await a.textContent('.to-admin'), /Licensed for 3 users/);
+    await go(a, 'people');
+    assert.strictEqual(await a.locator('.to-badge.is-warn', { hasText: 'Over licence' }).count(), 4);
+    await fresh(eli);
+    const p = await open(eli, 'home');
+    await openForm(p);
+    await pickType(p, 'Casual leave');
+    assert.match(await summary(p), /above the number of users in the licence/);
+    assert.ok(await p.locator('.ms-Panel .ms-Panel-footer button.ms-Button--primary').isDisabled());
+    await closePanel(p);
+    await seedLists((lists) => (lists.BrillTM_Settings.items = lists.BrillTM_Settings.items.filter((r) => r.Title !== 'LicenseKey')));
   });
 
   await scenario('Sample organisation can be installed and removed again', async () => {

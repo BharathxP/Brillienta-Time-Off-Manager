@@ -6,25 +6,46 @@
   "version": "*",
   "manifestVersion": 2,
   "requiresCustomScript": false,
-  "supportedHosts": ["SharePointWebPart", "SharePointFullPage", "TeamsTab", "TeamsPersonalApp"],
+  "supportedHosts": [
+    "SharePointWebPart",
+    "SharePointFullPage",
+    "TeamsTab",
+    "TeamsPersonalApp"
+  ],
   "supportsThemeVariants": true,
   "supportsFullBleed": true,
   "preconfiguredEntries": [
     {
       "groupId": "5c03119e-3074-46fd-976b-c60198311f70",
-      "group": { "default": "Advanced" },
-      "title": { "default": "Brillienta Time Off Manager" },
-      "description": { "default": "Leave requests, balances, multilevel approvals, comp off and the team calendar." },
-      "officeFabricIconFontName": "Airplane",
-      "properties": { "view": "app" }
+      "group": {
+        "default": "Advanced"
+      },
+      "title": {
+        "default": "Brillienta Time Off Manager"
+      },
+      "description": {
+        "default": "Leave requests, balances, multilevel approvals, comp off and the team calendar."
+      },
+      "properties": {
+        "view": "app"
+      },
+      "iconImageUrl": "data:image/png;base64,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"
     },
     {
       "groupId": "5c03119e-3074-46fd-976b-c60198311f70",
-      "group": { "default": "Advanced" },
-      "title": { "default": "Team Leave Calendar" },
-      "description": { "default": "Who is away: the team calendar of Brillienta Time Off Manager." },
-      "officeFabricIconFontName": "CalendarWeek",
-      "properties": { "view": "calendar" }
+      "group": {
+        "default": "Advanced"
+      },
+      "title": {
+        "default": "Team Leave Calendar"
+      },
+      "description": {
+        "default": "Who is away: the team calendar of Brillienta Time Off Manager."
+      },
+      "properties": {
+        "view": "calendar"
+      },
+      "iconImageUrl": "data:image/png;base64,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"
     }
   ]
 }
